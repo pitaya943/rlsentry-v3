@@ -1,0 +1,8 @@
+time	who	decision	why	evidence
+2026-11-27T05:52Z	owner	v3 is for learning and to test the latest harness; cover the whole target as professional research	owner answers in the agreeing conversation	conversation 2026-11-27
+2026-11-27T05:52Z	owner	UI is one self-contained HTML report per run, publishable as a Claude Artifact	owner chose the recommended option	conversation 2026-11-27
+2026-11-27T05:52Z	owner	live targets only in a late live-probe task: own projects, opt-in, non-destructive	owner chose the recommended option	conversation 2026-11-27
+2026-11-27T05:52Z	owner	threat model goes in the spec; related-work survey is its own task	owner chose the recommended option	conversation 2026-11-27
+2026-11-27T05:52Z	owner	first task is spec and roadmap only, no code	owner chose option (a)	conversation 2026-11-27
+2026-11-27T05:52Z	orchestrator	stack: Python CLI, PostgreSQL 16 + PostgREST, local and Docker backends	owner said "as your advice"	docs/tasks/v3-spec/brief.md Assumptions
+2026-11-27T05:52Z	orchestrator	spec written in full only for anon-read; later tasks get a roadmap goal	keeps the first PR reviewable; later briefs write their own scenarios	docs/tasks/v3-spec/brief.md Out of scope
