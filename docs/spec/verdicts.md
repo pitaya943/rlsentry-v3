@@ -11,8 +11,9 @@ None hold yet: nothing is built. The read scenarios `anon-read` builds are under
 
 ## Rules
 
-Every rule here was decided by `v3-spec`. The scenarios for insert, update and delete are written
-by `anon-write`'s brief; the rules they follow are these.
+Every rule here was decided by `v3-spec`. They decide exposed for every operation and protected for
+a read; when a write is protected is `anon-write`'s to decide (see
+[Insert, update and delete](#insert-update-and-delete)).
 
 ### Two verdicts, and nothing between them
 
@@ -66,17 +67,14 @@ neither of them.
 
 ### Grants
 
-- A missing grant protects an operation only when the catalog shows `anon` holds that privilege on
-  neither the table nor any of its columns. Why: PostgreSQL grants read, insert and update on single
-  columns as well as on the whole table; a visitor refused a whole-row attempt for lacking the table
-  grant can still read, write or change the columns granted to it, so that refusal says nothing
-  about them.
+- A missing grant protects a read only when the catalog shows `anon` holds the read privilege on
+  neither the table nor any of its columns. Why: PostgreSQL grants read on single columns as well as
+  on the whole table; a visitor refused a whole-row read for lacking the table grant can still read
+  the columns granted to it, so that refusal says nothing about them.
 - When `anon` holds a privilege on some columns only, every attempt for that operation names exactly
-  those columns (a read asks for them, an insert or update sends values only for them), and it is
-  judged by the rules below like any other attempt. Why: those columns are what the visitor can
-  actually reach; an attempt naming others is refused by the grant before any policy is asked, so it
-  shows nothing about the policies.
-- Delete has no column privilege; its grant is the table's alone.
+  those columns (a read asks for them, an insert or update sends values only for them). Why: those
+  columns are what the visitor can actually reach; an attempt naming others is refused by the grant
+  before any policy is asked, so it shows nothing about the policies.
 
 ### Read
 
@@ -105,104 +103,67 @@ neither of them.
   the values its policies and definitions name (a rule of [the throwaway copy](throwaway-copy.md)),
   and the basis of a protected read says it covers those rows.
 
-### Insert
+### Insert, update and delete
 
 - **Exposed** when the direct view finds, after the attempt, a row that was not in the table before
-  it and that came from the attempt. The evidence is that row as stored. Why: only the stored row
-  shows the write landed; a success status can come from a trigger that dropped it.
-- **Protected** when the log shows the attempt refused with `42501` by PostgreSQL's row-level security
-  check (the row failed the insert policies) or by its privilege check while the catalog shows `anon`
-  holds the insert privilege on neither the table nor any of its columns, and the direct view finds
-  no new row. Why: these are the two refusals that mean "the visitor may not create this row"; any
-  other refusal (a constraint, a trigger, a unique key) only says this particular row was
-  unacceptable.
-- After a refusal by row-level security, the value search tries further rows; the insert is protected
-  only when every row it tries is refused by row-level security or the privilege check. Why: a policy
-  that admits only certain values is still open to whoever sends those values.
-- A refusal of any other kind is never protected: what rlsentry may clear and try again is for
-  `anon-write`'s brief; if no verdict can be shown after that, the run stops.
-
-### Update and delete
-
-The two follow the same rules; only the change looked for differs.
-
-- **Exposed** when the direct view finds, after the attempt, a row that was in the table changed to
-  the values the attempt sent (update), or gone (delete). The evidence is the row before and after
-  (update) or the row removed (delete). Why: the table itself is the only proof a write landed.
-- The first attempt carries no filter. Why: a filter can only narrow the rows a statement reaches,
-  and PostgreSQL lets a statement with a filter reach only rows its read policies admit, so a table
-  whose only policy allows writing would look protected to an attempt by key, while one without a
-  filter reaches every row the write policies admit.
-- Every update attempt sends, in some column the visitor may update, a value no row holds, besides
-  any value the value search is testing; when the visitor may update no other column, a row that
-  already holds the tested value is one that try cannot change, and the try says nothing about it.
-  So an update attempt **reached no row** when it ended without error and every row it could change
-  is unchanged; a delete attempt, when it ended without error and every row is still there. Why: no
-  signal the REST layer relays counts rows, and a row the attempt reached is a row the direct view
-  sees changed.
-- **Protected** when the direct view finds every row unchanged and either:
-  - the log shows the attempt refused with `42501` by PostgreSQL's privilege check while the catalog
-    shows `anon` holds the privilege on neither the table nor any of its columns (for delete, on the
-    table); or
-  - the attempt reached no row, the direct view found rows in the table, the attempt carried no
-    filter of its own, and PostgreSQL says row-level security applies to that statement; or
-  - the attempt without a filter was refused, and every row then tried on its own (below) is
-    protected.
-
-  Why: row-level security hides rows from an update or delete the way it hides them from a read,
-  silently, so the silent case needs the same four facts as an empty read. A refusal by row-level
-  security is not enough on its own, as the next rule says.
-- **A statement refused as a whole says nothing about each row.** When an attempt without a filter
-  is refused by anything other than the privilege check (row-level security's check on a new row, a
-  constraint, a trigger), rlsentry tries each row of the table on its own: a filter on that row's
-  values in the columns the visitor may read, picking out that row or the fewest rows the visitor can
-  name together. Each such try is judged like the first attempt, and after a refusal by row-level
-  security an update's value search runs on that row. The row is protected when its try is refused
-  by row-level security for every value tried, or reached no row while PostgreSQL says row-level
-  security applies to it. When `anon` may read none of the table's columns, the visitor can send no
-  filter at all, so the refused attempt without one is the only request it has, and it stands for
-  every row. Why: PostgreSQL refuses a whole statement when any one row it reaches is refused, so one
-  row the visitor may not change can hide every row it may; a row refused alone is refused in every
-  statement that reaches it, and a row hidden from a filtered try is reachable only without a
-  filter, which was refused.
-- After an update is refused by row-level security, the value search tries further new values, as
-  for insert; the update is protected only when every value it tries is refused by row-level
-  security or the privilege check and every row is still unchanged. Why: a policy whose check admits
-  only certain new values still lets whoever sends those values rewrite the rows, in every other
-  column too. A delete writes no new row, so no policy can refuse it for its values and it has no
-  value search.
-- A refusal of any other kind, on the first attempt or on a row tried alone, is never protected; as
-  for insert, what follows is for `anon-write`'s brief, and if no verdict can be shown the run stops.
+  it and that came from the attempt (insert); a row that was in the table changed to the values the
+  attempt sent (update); or a row that was in the table gone (delete). The evidence is that row as
+  stored, the row before and after, or the row removed. Why: only the table itself shows a write
+  landed; a success status can come from a trigger that dropped the write.
+- When an insert, an update or a delete is **protected** is not decided here: `anon-write`'s brief
+  decides it, against running code, under [the bound](#the-bound-of-a-protected-verdict) below, and
+  must include the cases listed under
+  [Not yet built](#write-cases-anon-write-must-include-anon-write). Until then rlsentry attacks no
+  write (`anon-read` builds reads only), so no write is ever reported protected. Why: four reviews of this area found, on a real
+  PostgreSQL, a way past each write rule written ahead of code; the owner moved those rules to the
+  task that can test them (`v3-spec`, issue #8).
 
 ### The bound of a protected verdict
 
 Protected is a bounded promise: every request shape in the table below was tried, against the rows
 the copy held, and each was refused or kept from every row. Inside that bound a false protected must
 not happen; where a table's code could let through a request outside it, rlsentry gives no verdict.
-A rule added later to this area adds its row to the table. Why: the requests a visitor can send are
+A rule added later to this area adds its row to the table. The rows for insert, update and delete
+name the shapes a protected write must answer for; how it answers for them is `anon-write`'s to
+decide, and no write is protected before then. Why: the requests a visitor can send are
 open-ended (any header, any value, at any time), so no finite set of attempts covers them all; a
 promise with a published edge can be kept, and the reader can see where it ends. The owner chose
 this meaning (`v3-spec`, decision D-1).
 
 | Operation | The visitor varies | Why the attempts answer for it |
 |---|---|---|
-| all | the columns named | [Grants](#grants): attempts name exactly the columns `anon` may use, and a missing grant protects only when it holds none. |
+| all | the columns named | [Grants](#grants): attempts name exactly the columns `anon` may use, and a missing grant protects a read only when it holds none. |
 | read | filter, range, order | Each can only narrow an answer, and the attempt carries none, so it holds every row any of them could return. |
-| insert, update | the values sent | The value search, after a refusal by row-level security. |
-| insert | rows per request | Each row is checked on its own and one refused row refuses the request, so a row refused alone is refused in any request; each attempt sends one row. |
-| update, delete | filter or none | The first attempt has none: a filter only narrows the rows reached and adds the read policies to them. |
-| update, delete | which rows | A statement refused as a whole is followed by a try of each row on its own, as above. |
-| update | an insert that turns into an update on a duplicate key | PostgreSQL requires the existing row to be readable and passes the change through the update policies, so it reaches only rows a filtered update reaches, and the tries of each row answer for it. |
-| all | anything else: request headers (`Prefer` included), cookies, method, path, the time it is sent | Not varied. The check below finds whether the table's code reads any of it; when it does, there is no verdict. |
+| insert, update | the values sent | For `anon-write`'s rules to answer for. |
+| insert | rows per request | For `anon-write`'s rules to answer for. |
+| update, delete | filter or none | For `anon-write`'s rules to answer for. |
+| update, delete | which rows | For `anon-write`'s rules to answer for. |
+| update | an insert that turns into an update on a duplicate key | For `anon-write`'s rules to answer for. |
+| all | anything else: request headers (`Prefer` included), cookies, method, path, the time it is sent | Not varied. The check below finds whether what decides access reads any of it; when it does, there is no verdict. |
 | all | requests to other tables first, then this one | Not in the bound: each operation is judged alone, against the rows the copy held. |
 
-- **Before attacking an operation on a table, rlsentry reads what the table's code depends on**,
-  through the direct view: the policies that apply to `anon` on that table for that operation and
-  for read, the table's triggers and rules for that operation, its column defaults, generated
-  columns and checks, and every function, view and table these reach, followed to the end. The
-  operation gets a verdict only when all of it depends on nothing but:
-  - the row's own columns and the values the attempt sends (the value search varies them); not its
-    system columns such as `xmin` or `ctid`, which every write changes;
+- **Before attacking an operation on a table, rlsentry reads what decides access for it**, through
+  the direct view, and follows every function, view and table that reaches, to the end:
+  - for every operation, the policies that apply to `anon` on that table for that operation and for
+    read (a write reaches only rows the read policies admit);
+  - for insert, update and delete, also the table's checks, and its triggers and rules for that
+    operation: in a trigger, the conditions on every path to raising an error or returning no row;
+    in a rule, its condition and what it does instead;
+  - a value a column default (identity included) or a trigger puts into a row, only when one of the
+    above reads that column.
+
+  What decides nothing is not read: a default or a trigger that only fills a column nothing above
+  reads, such as `created_at` set by `now()` or `updated_at` set by a trigger. When rlsentry cannot
+  tell which of a trigger's statements decide, it counts them all. Why: a value that only fills a
+  column changes what the row holds, not whether the attempt is refused or which rows it reaches, so
+  a visitor gains nothing by changing it; counting it would stop almost every project (Supabase's
+  dashboard gives every new table `created_at default now()`), where the owner accepted stopping only
+  on unusual tables (D-1, #7). A mistake in telling the two apart must cost a stop, never a false
+  protected, so a doubt counts as deciding.
+
+  The operation gets a verdict only when all that decides access depends on nothing but:
+  - the row's own columns and the values the attempt sends; not its system columns such as `xmin`
+    or `ctid`, which every write changes;
   - the role: `current_user`, `current_role` and `session_user`, the same for every request;
   - the anon key's claims, read with `current_setting` named by a literal `request.jwt.claims` or
     `request.jwt.claim.<name>`: the key is signed, the visitor cannot change it without a secret
@@ -213,17 +174,17 @@ this meaning (`v3-spec`, decision D-1).
     result depends on their arguments alone.
 
   Anything else makes the run stop before that operation is attacked, with exit `2`; the message
-  names the table, the operation, the policy, trigger or function, and what it reads. That covers
-  any other request setting (`request.headers`, `request.cookies`, `request.method`,
+  names the table, the operation, the policy, check, trigger, rule or function, and what it reads.
+  That covers any other request setting (`request.headers`, `request.cookies`, `request.method`,
   `request.path`), any other setting, the clock, randomness, a sequence, the client's address and
   PostgreSQL's other functions not marked immutable, and any function whose body rlsentry cannot
   follow: one written in a language other than SQL or PL/pgSQL, or one that builds SQL text and runs
   it. Why: the visitor can change each of these from one request to the next (a header in each
   request, the moment it is sent), and rlsentry varies none of them, so code that reads one may let
-  through a request it never sent. A trigger counts as much as a policy: an update policy that admits
-  every row, behind a trigger that drops the change unless a header is sent, reaches no row for
-  rlsentry's attempt and every row for the visitor who sends the header. How a function made by the
-  migrations is marked is not trusted, since a migration can mark one immutable while it reads a
+  through a request it never sent. A trigger that decides counts as much as a policy: an update
+  policy that admits every row, behind a trigger that drops the change unless a header is sent,
+  reaches no row for rlsentry's attempt and every row for the visitor who sends the header. How a
+  function made by the migrations is marked is not trusted, since a migration can mark one immutable while it reads a
   header, so rlsentry follows its body; PostgreSQL's own functions carry the marks PostgreSQL gave
   them, which a migration, not being a superuser, cannot change.
 - The basis of every protected verdict says that it covers the request shapes of this table, one
@@ -244,7 +205,9 @@ this meaning (`v3-spec`, decision D-1).
 
 ## Not yet built
 
-Each scenario below is built by `anon-read`. "Shown by" says how a person or a test sees it hold.
+Each scenario below is built by the task it is marked with: the read scenarios by `anon-read`, in
+full; the write cases by `anon-write`, whose brief writes them in full. "Shown by" says how a person
+or a test sees a scenario hold.
 
 ### Read a table that has row-level security off (`anon-read`)
 
@@ -348,6 +311,15 @@ Shown by: a test on a lab schema with such a policy checks that no verdict is re
 and the exit code; and a person sends the same read with that header to the copy and sees a row come
 back, which is why protected would have been wrong.
 
+### A column filled with the time does not stop the run (`anon-read`)
+
+Given a table with a column filled by default with the current time, and a read policy that reads
+only the row's other columns,
+when the user runs rlsentry,
+then the read gets a verdict like any other table's, and the run does not stop on that default.
+Shown by: a test on a lab schema with such a table (the shape Supabase's dashboard gives a new
+table) checks that a read verdict is reported and the exit code is `0` or `1`, not `2`.
+
 ### A run that finds something and then stops exits 2 (`anon-read`)
 
 Given a project with one table whose read is exposed and, attacked after it, another whose read
@@ -356,6 +328,20 @@ when the user runs rlsentry,
 then the message names the exposed table and the table that stopped the run, and the command exits
 `2`, not `1`.
 Shown by: a test on such a schema checks the message and the exit code.
+
+### Write cases `anon-write` must include (`anon-write`)
+
+Each was found by a review of this area on a real PostgreSQL 16, as a write a visitor could make
+while a rule written ahead of code said protected; `anon-write`'s brief writes each in full.
+
+- A write refused for lacking the table grant, while `anon` holds the privilege on some columns and
+  writes them ([review 1](https://github.com/pitaya943/rlsentry-v3/pull/6#issuecomment-7211268769)).
+- An update refused by the policy's check on the new row, while another value passes it
+  ([review 1](https://github.com/pitaya943/rlsentry-v3/pull/6#issuecomment-7211268769)).
+- An update without a filter refused because of one row, while an update filtered to another row
+  lands ([review 2](https://github.com/pitaya943/rlsentry-v3/pull/6#issuecomment-7211365081)).
+- An update a trigger or rule silently drops unless the new row holds a value the visitor chooses
+  ([review 4](https://github.com/pitaya943/rlsentry-v3/pull/6#issuecomment-7211823557)).
 
 ## Changed by
 

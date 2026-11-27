@@ -44,8 +44,8 @@ task that builds it. The order of those tasks is in [the roadmap](../roadmap.jso
 - **operation**: one of read, insert, update and delete. Each is attacked on its own, on every
   table.
 - **attempt**: the one request rlsentry sends as the anonymous visitor to try an operation on a
-  table (each try of the value search is an attempt too, and so is each row tried on its own after an
-  update or delete without a filter was refused as a whole).
+  table. Each further try of the same operation, such as a try of the value search, is an attempt
+  too.
 - **row-level security**: PostgreSQL's per-row access rules on a table; **policy**: one such rule.
   **grant**: a privilege a role holds or lacks on a whole table or on some of its columns, checked
   before any policy.
@@ -63,9 +63,9 @@ task that builds it. The order of those tasks is in [the roadmap](../roadmap.jso
 - **the database's own account**: what PostgreSQL itself records about an attempt (its server log
   of that statement, with the error code and the place in PostgreSQL's own code that raised it) and
   what its catalog says about the table. It is defined in [Verdicts and evidence](verdicts.md).
-- **value search**: once an insert or an update has been refused by row-level security, the further
-  attempts rlsentry makes with new rows (insert) or new values (update) built from the table's own
-  column defaults, checks and policies, looking for one the policies let in.
+- **value search**: the further attempts rlsentry makes on an insert or an update with new rows or
+  new values built from those the table's own definitions name (its defaults, checks, policies,
+  triggers and rules), looking for one that gets through. When it runs is `anon-write`'s to decide.
 - **the lab**: the bundled schemas, each with a deliberate flaw and named for it.
 - **`--target`**: the command-line option naming a live project. It is refused until the
   `live-probe` task.
