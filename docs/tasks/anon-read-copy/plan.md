@@ -8,7 +8,7 @@ parallel could not see each other's choices in the shared modules. The shape is 
 |---|---|---|---|
 | [T-01](tickets/T-01.md) package, CLI, versions, the copy built from migrations and always destroyed, the safety boundary, the test suite | S-5 (all but seeding and the reads), S-7, S-10 (harness), S-1 *A migration that fails*, *plain folder*, live target, #23 inputs | none | high |
 | [T-02](tickets/T-02.md) seeding, PostgREST, the two reads, the exposed verdict and every stop of a read, exit codes | S-1 (verdicts, attacking), S-2, S-4, S-5 (seeding, grants, two runs), S-6 | T-01 | high |
-| [T-03](tickets/T-03.md) the text summary, the JSON report and its schema, escaping, stopped-run reports, reproducible reports | S-1 (reports), S-3 | T-02 | medium |
+| [T-03](tickets/T-03.md) the text summary, the JSON report and its schema, escaping, stopped-run reports, reproducible reports | S-1 (reports), S-3 | T-02 | high (raised: its seeding change reaches the evidence) |
 | [T-04](tickets/T-04.md) the lab: schemas, statements, `rlsentry lab`, a test of every schema; README; `try-rlsentry` skill | S-8 | T-03 | medium |
 | [T-05](tickets/T-05.md) the spec moved to what was built (S-9), the one-definition check and `checks.md` sentence (S-11) | S-9, S-11 | T-04 | low |
 
