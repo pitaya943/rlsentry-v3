@@ -7,3 +7,6 @@ time	who	decision	why	evidence
 2026-11-27T05:52Z	orchestrator	stack: Python CLI, PostgreSQL 16 + PostgREST, local and Docker backends	owner said "as your advice"	docs/tasks/v3-spec/brief.md Assumptions
 2026-11-27T05:52Z	orchestrator	spec written in full only for anon-read; later tasks get a roadmap goal	keeps the first PR reviewable; later briefs write their own scenarios	docs/tasks/v3-spec/brief.md Out of scope
 2026-11-27T05:55Z	orchestrator	reader read brief at c254827; owner agreed to fix the gaps it found (S-3 vs Out of scope, verdict model, S-6 rules, roadmap check before main, terms)	fresh read showed gaps a builder would guess at	docs/tasks/v3-spec/brief.md
+2026-11-27T05:57Z	orchestrator	second reader read brief at 118dcbe; owner accepted four small fixes without a third read	after a second read the rest is the owner's call	docs/tasks/v3-spec/brief.md
+2026-11-27T05:57Z	owner	brief-approved fcd38ee9cb2a4f149bc783685bab1aa2f768fb57	owner said the brief is right	conversation 2026-11-27
+2026-11-27T05:57Z	owner	roadmap-approved c2548274b3feac466963be3a4bfd0525de2ab0c2	owner approved the roadmap with the brief	docs/roadmap.json
