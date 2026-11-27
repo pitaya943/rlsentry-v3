@@ -111,9 +111,9 @@ neither of them.
 - **Protected** when the log shows the attempt refused with `42501` by PostgreSQL's row-level security
   check (the row failed the insert policies) or by its privilege check while the catalog shows `anon`
   holds the insert privilege on neither the table nor any of its columns, and the direct view finds
-  no new row. Why: these are the two refusals that
-  mean "the visitor may not create this row"; any other refusal (a constraint, a trigger, a unique
-  key) only says this particular row was unacceptable.
+  no new row. Why: these are the two refusals that mean "the visitor may not create this row"; any
+  other refusal (a constraint, a trigger, a unique key) only says this particular row was
+  unacceptable.
 - After a refusal by row-level security, the value search tries further rows; the insert is protected
   only when every row it tries is refused by row-level security or the privilege check. Why: a policy
   that admits only certain values is still open to whoever sends those values.
@@ -127,25 +127,68 @@ The two follow the same rules; only the change looked for differs.
 - **Exposed** when the direct view finds, after the attempt, a row that was in the table changed to
   the values the attempt sent (update), or gone (delete). The evidence is the row before and after
   (update) or the row removed (delete). Why: the table itself is the only proof a write landed.
+- The first attempt carries no filter. Why: a filter can only narrow the rows a statement reaches,
+  and PostgreSQL lets a statement with a filter reach only rows its read policies admit, so a table
+  whose only policy allows writing would look protected to an attempt by key, while one without a
+  filter reaches every row the write policies admit.
+- Every update attempt sends, in some column the visitor may update, a value no row holds, besides
+  any value the value search is testing; when the visitor may update no other column, a row that
+  already holds the tested value is one that try cannot change, and the try says nothing about it.
+  So an update attempt **reached no row** when it ended without error and every row it could change
+  is unchanged; a delete attempt, when it ended without error and every row is still there. Why: no
+  signal the REST layer relays counts rows, and a row the attempt reached is a row the direct view
+  sees changed.
 - **Protected** when the direct view finds every row unchanged and either:
-  - the log shows the attempt refused with `42501` by PostgreSQL's row-level security check (an
-    update's new row failed the policies) or by its privilege check while the catalog shows `anon`
-    holds the privilege on neither the table nor any of its columns (for delete, on the table); or
-  - the attempt's statement ran without error and reached no row, the direct view found rows in the
-    table, the attempt carried no filter of its own, and PostgreSQL says row-level security applies to
-    that statement.
+  - the log shows the attempt refused with `42501` by PostgreSQL's privilege check while the catalog
+    shows `anon` holds the privilege on neither the table nor any of its columns (for delete, on the
+    table); or
+  - the attempt reached no row, the direct view found rows in the table, the attempt carried no
+    filter of its own, and PostgreSQL says row-level security applies to that statement; or
+  - the attempt without a filter was refused, and every row then tried on its own (below) is
+    protected.
 
   Why: row-level security hides rows from an update or delete the way it hides them from a read,
-  silently, so the silent case needs the same four facts as an empty read.
+  silently, so the silent case needs the same four facts as an empty read. A refusal by row-level
+  security is not enough on its own, as the next rule says.
+- **A statement refused as a whole says nothing about each row.** When an attempt without a filter
+  is refused by anything other than the privilege check (row-level security's check on a new row, a
+  constraint, a trigger), rlsentry tries each row of the table on its own: a filter on that row's
+  values in the columns the visitor may read, picking out that row or the fewest rows the visitor can
+  name together. Each such try is judged like the first attempt, and after a refusal by row-level
+  security an update's value search runs on that row. The row is protected when its try is refused
+  by row-level security for every value tried, or reached no row while PostgreSQL says row-level
+  security applies to it. When `anon` may read none of the table's columns, the visitor can send no
+  filter at all, so the refused attempt without one is the only request it has, and it stands for
+  every row. Why: PostgreSQL refuses a whole statement when any one row it reaches is refused, so one
+  row the visitor may not change can hide every row it may; a row refused alone is refused in every
+  statement that reaches it, and a row hidden from a filtered try is reachable only without a
+  filter, which was refused.
 - After an update is refused by row-level security, the value search tries further new values, as
   for insert; the update is protected only when every value it tries is refused by row-level
   security or the privilege check and every row is still unchanged. Why: a policy whose check admits
   only certain new values still lets whoever sends those values rewrite the rows, in every other
   column too. A delete writes no new row, so no policy can refuse it for its values and it has no
   value search.
-- An update or delete is judged protected only from an attempt with no filter. Why: a filter naming
-  a row needs the visitor to be able to see that row, so a table whose only policy allows writing
-  would look protected to an attempt by key, while an attempt without a filter changes every row.
+- A refusal of any other kind, on the first attempt or on a row tried alone, is never protected; as
+  for insert, what follows is for `anon-write`'s brief, and if no verdict can be shown the run stops.
+
+### Request shapes
+
+A protected verdict is a claim about every request the
+[threat model](threat-model.md#what-the-attacker-can-send) lets the visitor send for that operation,
+not about the requests rlsentry chose. For each way the visitor can vary a request, this table says
+why rlsentry's attempts answer for it. A rule added later to this area adds its row here. Why: a rule
+that is true only of the attempts it lists says protected on tables a different request opens.
+
+| Operation | The visitor varies | Why the attempts answer for it |
+|---|---|---|
+| all | the columns named | [Grants](#grants): attempts name exactly the columns `anon` may use, and a missing grant protects only when it holds none. |
+| read | filter, range, order | Each can only narrow an answer, and the attempt carries none, so it holds every row any of them could return. |
+| insert, update | the values sent | The value search, after a refusal by row-level security. |
+| insert | rows per request | Each row is checked on its own and one refused row refuses the request, so a row refused alone is refused in any request; each attempt sends one row. |
+| update, delete | filter or none | The first attempt has none: a filter only narrows the rows reached and adds the read policies to them. |
+| update, delete | which rows | A statement refused as a whole is followed by a try of each row on its own, as above. |
+| update | an insert that turns into an update on a duplicate key | PostgreSQL requires the existing row to be readable and passes the change through the update policies, so it reaches only rows a filtered update reaches, and the tries of each row answer for it. |
 
 ### Exit codes
 
