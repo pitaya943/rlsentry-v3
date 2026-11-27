@@ -264,8 +264,39 @@ def _insert(conn: pg.Connection, table: Table, row: dict[str, str | None]) -> bo
         return False
 
 
+# What a value read from the clock while seeding becomes, so that two runs hold the same rows.
+CLOCK = {"timestamptz": "2024-02-01 00:00:00+00", "timestamp": "2024-02-01 00:00:00", "date": "2024-02-01"}
+
+
+def _pin_clock(admin: pg.Connection, tables: list[Table], since: str) -> None:
+    """Every date or time value a trigger or default took from the clock while seeding (one within a
+    day of the seeding, which no made-up value is) is set to a fixed one, as the superuser with
+    triggers off, so the update itself reads no clock. A row whose checks refuse it is left as it is,
+    and so is a column of a foreign key, which triggers off would no longer guard."""
+    keyed = {(t.oid, c) for t in tables for cols, _, _ in t.keys for c in cols}
+    keyed |= {(parent, c) for t in tables for _, parent, pcols in t.keys for c in pcols}
+    admin.execute("set session_replication_role = replica")
+    try:
+        for table in tables:
+            for c in table.columns:
+                if c.skip or c.base not in CLOCK or (table.oid, c.name) in keyed:
+                    continue
+                col, base = quote_ident(c.name), f"pg_catalog.{c.base}"
+                try:
+                    admin.execute(
+                        f"update {table.qualified} set {col} = {quote_literal(CLOCK[c.base])} "
+                        f"where {col}::{base} between ({quote_literal(since)}::pg_catalog.timestamptz "
+                        f"- interval '1 day')::{base} and (pg_catalog.clock_timestamp() + interval '1 day')::{base}"
+                    )
+                except pg.PgError:
+                    pass
+    finally:
+        admin.execute("reset session_replication_role")
+
+
 def fill(admin: pg.Connection, migrations: pg.Connection, oids: list[str], users_oid: str) -> None:
     """Fill the tables `oids` (and every table their keys reach), `users_oid` first, as `migrations`."""
+    [(since,)] = admin.rows("select pg_catalog.clock_timestamp()::pg_catalog.text")
     tables = _catalog(admin, _closure(admin, sorted(set(oids) | {users_oid}, key=int)))
     parents: dict[tuple, list[tuple]] = {}
     needed = {(p, tuple(pc)) for t in tables.values() for _, p, pc in t.keys}
@@ -278,3 +309,4 @@ def fill(admin: pg.Connection, migrations: pg.Connection, oids: list[str], users
         for parent, pcols in needed:
             if parent == table.oid:
                 parents[(parent, pcols)] = _rows_of(admin, table, list(pcols))
+    _pin_clock(admin, list(tables.values()), since)

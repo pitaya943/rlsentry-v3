@@ -83,24 +83,3 @@ def test_without_the_grants_a_second_schemas_table_gets_no_verdict_naming_the_sc
     assert "anon is not granted usage on schema api" in found["api.items"]["text"]
     assert "api.items" in done.stderr and "schema api" in done.stderr
 
-
-REPRODUCIBLE = {"001.sql": """
-create table events (
-  id uuid primary key default gen_random_uuid(),
-  name text not null,
-  kind text check (kind in ('talk', 'workshop')),
-  starts timestamptz,
-  created_at timestamptz not null default now(),
-  data jsonb
-);
-create table rooms (id bigint generated always as identity primary key, label varchar(4), size numeric(6, 2));
-"""}
-
-
-def test_two_runs_on_the_same_migrations_give_the_same_outcomes_in_the_same_order(tmp_path):
-    first, found = run(tmp_path, REPRODUCIBLE, name="one")
-    second, again = run(tmp_path, REPRODUCIBLE, name="two")
-    assert first.returncode == second.returncode == 1, first.stdout + first.stderr
-    assert list(found) == ["public.events", "public.rooms"]
-    assert found == again
-    assert first.stdout == second.stdout

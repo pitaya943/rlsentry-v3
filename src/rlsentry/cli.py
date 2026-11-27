@@ -5,10 +5,12 @@ from __future__ import annotations
 import argparse
 import signal
 import sys
+from datetime import datetime, timezone
+from pathlib import Path
 
 from . import attack, direct, inputs, verdicts, versions
 from .copy import Copy
-from .report import Outcome, Result, Stopped, plain, stop_message
+from .report import Outcome, Result, Stopped, stop_message, summary, write_json
 from .stops import Stop, printable
 
 EXIT_STOPPED = 2
@@ -30,6 +32,7 @@ def _parser() -> argparse.ArgumentParser:
         "as the anonymous visitor.",
     )
     p.add_argument("project", nargs="?", help="a Supabase project's folder, or a folder of .sql files")
+    p.add_argument("--json", metavar="FILE", type=Path, help="also write the JSON report to FILE")
     p.add_argument("--target", metavar="URL", help="a live project: refused, not available yet")
     return p
 
@@ -50,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_STOPPED
     signal.signal(signal.SIGTERM, _on_sigterm)
     try:
-        return _run(args.project)
+        return _run(args.project, args.json)
     except Stop as stop:
         say(f"stopped: {stop.reason}")
         return EXIT_STOPPED
@@ -62,20 +65,23 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_STOPPED
 
 
-def _run(arg: str) -> int:
+def _run(arg: str, json_path: Path | None) -> int:
+    ran_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     project = inputs.resolve(arg)
     for note in project.notes:
         say(note)
     programs, found = versions.check()
     with Copy(project, programs, found, say=say) as copy:
-        result = Result(migrations=len(project.migrations), exposed_schemas=project.exposed_schemas,
+        result = Result(ran_at=ran_at, migrations=len(project.migrations), exposed_schemas=project.exposed_schemas,
                         postgres=copy.versions.postgres, postgrest=copy.versions.postgrest)
         try:
             _attack(copy, project, result)
             result.finished = True
         except Stop as stop:
             result.stop = Stopped(stop.reason, stop.table)
-        print(plain(result), flush=True)
+        print(summary(result), flush=True)
+        if json_path is not None:
+            write_json(result, json_path)
         message = stop_message(result)
         if message:
             say(message)

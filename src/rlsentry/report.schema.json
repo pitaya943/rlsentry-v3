@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "rlsentry report",
+  "description": "The JSON report of one rlsentry run. schema_version is MAJOR.MINOR: removing or renaming a field, or changing what one means, is a new major version; adding a field is a new minor version.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "ran_at", "versions", "migrations", "exposed_schemas", "results", "partitions",
+               "not_reachable", "finished", "stop", "exit_code", "exit_meaning"],
+  "properties": {
+    "schema_version": {"const": "1.0", "description": "The version of this schema the report follows."},
+    "ran_at": {"type": "string", "description": "The time of the run, UTC, ISO 8601; the only field that differs between two runs on the same migrations."},
+    "versions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rlsentry", "postgresql", "postgrest"],
+      "properties": {
+        "rlsentry": {"type": "string"},
+        "postgresql": {"type": "string", "description": "The exact version the copy's server ran."},
+        "postgrest": {"type": "string", "description": "The exact version of PostgREST the copy ran."}
+      }
+    },
+    "migrations": {"type": "integer", "minimum": 0, "description": "How many migration files the copy was built from."},
+    "exposed_schemas": {"type": "array", "items": {"type": "string"}},
+    "results": {
+      "type": "array",
+      "description": "One entry per table of an exposed schema and operation judged, in schema-qualified name order.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schema", "table", "operation", "verdict", "basis", "evidence", "attempts", "reason"],
+        "properties": {
+          "schema": {"type": "string"},
+          "table": {"type": "string"},
+          "operation": {"enum": ["read"]},
+          "verdict": {"enum": ["exposed", null], "description": "null: no verdict (the run then ends with exit 2)."},
+          "basis": {
+            "description": "For an exposed verdict: what it rests on; null otherwise.",
+            "oneOf": [
+              {"type": "null"},
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["requests", "rows_read", "rows_held", "columns", "text"],
+                "properties": {
+                  "requests": {"type": "array", "minItems": 1, "items": {"enum": ["anon key", "no key"]},
+                               "description": "Which requests got rows the table holds."},
+                  "rows_read": {"type": "integer", "minimum": 1},
+                  "rows_held": {"type": "integer", "minimum": 1},
+                  "columns": {"type": ["array", "null"], "items": {"type": "string"},
+                              "description": "The columns read, when the read grant covers only some; null when it covers all."},
+                  "text": {"type": "string", "description": "The basis as the summary words it."}
+                }
+              }
+            ]
+          },
+          "evidence": {"type": ["object", "null"],
+                       "description": "For an exposed verdict: one row the visitor got, as the copy holds it, on the columns read; null otherwise."},
+          "attempts": {
+            "type": "array",
+            "description": "The requests sent: none when the table got no verdict before any request.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["key", "status", "error_code", "rows", "reason"],
+              "properties": {
+                "key": {"enum": ["anon key", "no key"]},
+                "status": {"type": ["integer", "null"], "description": "The HTTP status; null when no answer came."},
+                "error_code": {"type": ["string", "null"], "description": "The PostgreSQL error code the answer named."},
+                "rows": {"type": ["integer", "null"], "description": "How many rows the table holds the answer held; null when it did not show the read exposed."},
+                "reason": {"type": ["string", "null"], "description": "Why this request did not show the read exposed."}
+              }
+            }
+          },
+          "reason": {"type": ["string", "null"], "description": "For no verdict: why, as the summary words it; null for a verdict."}
+        }
+      }
+    },
+    "partitions": {
+      "type": "array",
+      "description": "Partitioned tables of an exposed schema: attacked through the parent only.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["parent", "partitions"],
+        "properties": {
+          "parent": {"type": "string"},
+          "partitions": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "not_reachable": {"type": "array", "items": {"type": "string"},
+                      "description": "Tables in schemas the REST layer does not expose, named and not attacked."},
+    "finished": {"type": "boolean", "description": "Whether every table was tried."},
+    "stop": {
+      "description": "Why the run ends with exit 2; null when it does not.",
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reason", "table"],
+          "properties": {
+            "reason": {"type": "string"},
+            "table": {"type": ["string", "null"], "description": "The table the run stopped at, for a stop that ended it at once."}
+          }
+        }
+      ]
+    },
+    "exit_code": {"enum": [0, 1, 2]},
+    "exit_meaning": {"type": "string"}
+  }
+}
