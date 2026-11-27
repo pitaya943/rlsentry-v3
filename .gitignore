@@ -1,2 +1,5 @@
 .shilaycow/worktrees/
 __pycache__/
+*.egg-info/
+.pytest_cache/
+build/

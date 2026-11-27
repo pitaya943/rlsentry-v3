@@ -2,5 +2,5 @@
 owner: pitaya943        # the only account that approves and merges into main
 bot: bullet-bots        # the account agent sessions act as (Write role, not Admin)
 mode: auto              # /shilaycow agrees a brief; /shilaycow run runs it unattended
-test_command: ""        # empty: no test suite yet; the first task that adds one sets it
+test_command: "python3 -m pytest -q"  # after `pip install -e .[test]`; needs PostgreSQL 16 and PostgREST 12.2
 fix_rounds: 2           # verifier FAIL -> fix -> re-verify rounds before asking the owner
