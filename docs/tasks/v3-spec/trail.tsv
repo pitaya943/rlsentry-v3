@@ -17,3 +17,5 @@ time	who	decision	why	evidence
 2026-11-27T06:35Z	owner	protected is a bounded promise: every shape on the published list tried and refused; a policy depending on an input outside the list stops the run (exit 2) naming it	option 1 of #7	https://github.com/pitaya943/rlsentry-v3/issues/7#issuecomment-7211637933
 2026-11-27T06:35Z	owner	fix-round T-01	owner allowed one more fix round beyond the limit	https://github.com/pitaya943/rlsentry-v3/issues/7#issuecomment-7211637933
 2026-11-27T06:46Z	orchestrator	needs-owner #8	T-01 owner-granted round used; defects 6-7 remain	https://github.com/pitaya943/rlsentry-v3/pull/6#issuecomment-7211823557
+2026-11-27T06:52Z	owner	T-01 narrowed: write protected rules move to anon-write with defects 2, 3, 6 as its scenarios; one more fix round for T-01	option 1 of #8, decided in the conversation	https://github.com/pitaya943/rlsentry-v3/issues/8#issuecomment-7211920110
+2026-11-27T06:52Z	owner	close a needs-owner issue as soon as it is decided, so open ones are only those still waiting	owner asked in the conversation (issues cannot be deleted by the bot; closing is the nearest)	#7, #8 closed
