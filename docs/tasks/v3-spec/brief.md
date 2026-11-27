@@ -116,8 +116,10 @@ then it says, each with v3's own reason:
   attempt. For a read, which row-level security answers with an empty result and no error, it says
   what shows that rows existed and that a policy, not an empty table, kept them out;
 - that when neither verdict can be shown, the run stops; this is not a third verdict;
-- what each exit code means, at least: nothing exposed, something exposed, could not build,
-  attack or finish the run.
+- what each exit code means: `0` nothing exposed, `1` something exposed, `2` the run could not
+  build, attack or finish (one code for all three; the message says which);
+- the rules for insert, update and delete verdicts are decided here, under the area's Rules; their
+  full scenarios are written by `anon-write`'s brief.
 
 ### S-5: The roadmap orders the work and passes the harness's check
 
@@ -125,11 +127,13 @@ Given the merged `docs/roadmap.json`,
 when `state.py` from the shilaycow harness reads it,
 then it reports no problem, names `anon-read` as the next task, and the order has every task after
 its dependencies, the verdict model (this task) and the JSON report and its schema (`anon-read`)
-before the HTML report, and the copy and its safety before anything that attacks a live project.
+before the HTML report, and the copy and its safety (`anon-read`) before anything that attacks a live project.
 Each task's goal says what a user can try once it is merged. Before the roadmap is on `main`, a
 script in the task's folder checks the branch's `docs/roadmap.json` by the same rules `state.py`
-applies (every field present, no unknown dependency, no loop, a done task has a `pr`, an open task's
-dependencies are not done) and names the next task.
+applies (every task has `slug`, `goal`, `depends_on`, `pr` and `done`; no unknown dependency; no
+loop; a done task has a `pr`; no done task depends on one not done) and names the next task. On the
+task branch `v3-spec` itself stays `done: false`, so the script names `v3-spec` as the first open
+task and shows `anon-read` depends on it alone; this task's pull request sets it done.
 
 ### S-6: The spec is v3's own
 
@@ -138,8 +142,9 @@ when someone compares them,
 then a check script in the task's folder finds no run of 12 or more consecutive words shared
 between any file of v3's `docs/spec/` and any `docs/spec/*.md` of `pitaya943/rlsentry-v2` at
 commit `21ae616` on `main`. Before comparing, the script lowercases the text, removes markdown
-syntax and punctuation, and does not count the words Given, When, Then and And that open a
-scenario line; it prints each shared run it finds, and its result is recorded in the task's folder.
+syntax and punctuation, and drops the words Given, When, Then and And that open a scenario
+line, joining the words on either side; it compares only v3's `.md` files, prints each shared run
+it finds, and its output is saved as `docs/tasks/v3-spec/overlap.txt`.
 Every rule in v3's spec gives its own reason.
 
 ## How to try it
