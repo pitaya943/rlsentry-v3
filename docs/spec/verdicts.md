@@ -139,6 +139,9 @@ this meaning (`v3-spec`, decision D-1).
 | update, delete | filter or none | For `anon-write`'s rules to answer for. |
 | update, delete | which rows | For `anon-write`'s rules to answer for. |
 | update | an insert that turns into an update on a duplicate key | For `anon-write`'s rules to answer for. |
+| all | the key: the anon key, or none | [Attacking a project](attacking.md#what-each-attempt-carries): every operation is attempted both ways, and is protected only when both attempts are. |
+| all | the schema selected by `Accept-Profile` or `Content-Profile` | [Attacking a project](attacking.md#what-each-attempt-carries): a table is reached only under its own schema's name, which every attempt on it selects, so the search path is the visitor's too. |
+| all | the REST layer's own settings and per-request code (`pgrst.*`, settings on a role) | [The throwaway copy](throwaway-copy.md#the-rest-layers-settings-come-from-rlsentry-alone): none a migration makes takes effect in the copy, and when the migrations make any the run stops. |
 | all | anything else: request headers (`Prefer` included), cookies, method, path, the time it is sent | Not varied. The check below finds whether what decides access reads any of it; when it does, there is no verdict. |
 | all | requests to other tables first, then this one | Not in the bound: each operation is judged alone, against the rows the copy held. |
 
@@ -165,10 +168,11 @@ this meaning (`v3-spec`, decision D-1).
   - the row's own columns and the values the attempt sends; not its system columns such as `xmin`
     or `ctid`, which every write changes;
   - the role: `current_user`, `current_role` and `session_user`, the same for every request;
-  - the anon key's claims, read with `current_setting` named by a literal `request.jwt.claims` or
+  - the claims, read with `current_setting` named by a literal `request.jwt.claims` or
     `request.jwt.claim.<name>`: the key is signed, the visitor cannot change it without a secret
-    the [threat model](threat-model.md#what-the-attacker-holds) says they never hold, and the
-    attempts carry exactly that key;
+    the [threat model](threat-model.md#what-the-attacker-holds) says they never hold, so the claims
+    are either the anon key's or, with no key, the role alone, and the attempts are sent both ways
+    ([Attacking a project](attacking.md#what-each-attempt-carries) says which claims may be read);
   - the rows of other tables as the copy holds them;
   - constants, and PostgreSQL's own functions and operators that PostgreSQL marks immutable, whose
     result depends on their arguments alone.

@@ -35,6 +35,10 @@ task that builds it. The order of those tasks is in [the roadmap](../roadmap.jso
   Attacked only from the `authenticated-attack` task onward.
 - **the copy**: the disposable PostgreSQL database with PostgREST in front of it that one run builds
   on this machine from a project's migrations, attacks, and destroys however the run ends.
+- **the REST layer**: PostgREST, which Supabase puts in front of a project's database and the copy
+  runs too; every attempt goes through it.
+- **exposed schema**: a database schema the REST layer serves; a request chooses one with its
+  `Accept-Profile` or `Content-Profile` header. Tables in other schemas cannot be reached over it.
 - **backend**: where the copy runs: as local processes, or in Docker containers.
 - **seeding**: filling every table of the copy with fake rows, made up by rlsentry, before the
   attack begins.
