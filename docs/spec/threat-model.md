@@ -41,7 +41,8 @@ Every rule here was decided by `v3-spec`.
 
 For each operation on a table, the attacker wins when:
 
-- **read**: the answer contains at least one row the table really holds;
+- **read**: the answer contains values from at least one row the table really holds, even if only
+  some of its columns;
 - **insert**: a row the attacker sent is now in the table;
 - **update**: a row that was in the table now holds values the attacker sent;
 - **delete**: a row that was in the table is gone.

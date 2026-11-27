@@ -45,11 +45,14 @@ Only two sources count as the database's own account of an attempt. Why: migrati
 neither of them.
 
 - **The server log of the attempt's statement**, matched to that one attempt so that no other
-  statement's entry can stand in for it. For a refusal it holds the error code and the place in
-  PostgreSQL's own source that raised it: its privilege check, or its row-level security check.
-  Why: a function, trigger or policy can raise error `42501` with any message, but the place an
-  error was raised is recorded by PostgreSQL itself; an error raised from SQL or PL/pgSQL is logged
-  as raised there, never from the privilege or row-security check.
+  statement's entry can stand in for it. For a refusal it holds the error code, the place in
+  PostgreSQL's own source that raised it (its privilege check, or its row-level security check),
+  and the table the refusal names, which must be the attempted table. Why: a function, trigger or
+  policy can raise error `42501` with any message, but the place an error was raised is recorded by
+  PostgreSQL itself; an error raised from SQL or PL/pgSQL is logged as raised there, never from the
+  privilege or row-security check. And a policy that reads another table the visitor may not read
+  makes PostgreSQL's own privilege check refuse the attempt about that other table, which says
+  nothing about the attempted one.
 - **What the copy's catalog and data say**, read through the direct view: whether the table has
   row-level security on, whether `anon` holds the grant for the operation, what rows the table holds
   before and after the attempt, and whether row-level security applies to the attempt's own
@@ -59,16 +62,31 @@ neither of them.
   exactly when a policy stands between `anon` and the rows. Why: it is PostgreSQL's own answer to
   "did a policy decide this?", not rlsentry's reading of the policies.
 
+### Grants
+
+- A missing grant protects an operation only when the catalog shows `anon` holds that privilege on
+  neither the table nor any of its columns. Why: PostgreSQL grants read, insert and update on single
+  columns as well as on the whole table; a visitor refused a whole-row attempt for lacking the table
+  grant can still read, write or change the columns granted to it, so that refusal says nothing
+  about them.
+- When `anon` holds a privilege on some columns only, every attempt for that operation names exactly
+  those columns (a read asks for them, an insert or update sends values only for them), and it is
+  judged by the rules below like any other attempt. Why: those columns are what the visitor can
+  actually reach; an attempt naming others is refused by the grant before any policy is asked, so it
+  shows nothing about the policies.
+- Delete has no column privilege; its grant is the table's alone.
+
 ### Read
 
-- **Exposed** when the attempt's answer holds at least one row, and every row in it is a row the
-  direct view finds in the table. The evidence is one of those rows as the direct view holds it, and
-  the basis says how many of the table's rows the visitor got. Why: rows the table really holds are
-  the leak itself; a row the table does not hold could only come from code that shaped the answer, so
-  it is no evidence, and the run stops instead.
+- **Exposed** when the attempt's answer holds at least one row, and every row in it matches, on the
+  columns it holds, a row the direct view finds in the table. The evidence is one of those rows as
+  the direct view holds it, limited to the columns the visitor read. The basis says how many of the
+  table's rows the visitor got and, when its read grant covers only some columns, which ones. Why:
+  rows the table really holds are the leak itself; a row the table does not hold could only come from
+  code that shaped the answer, so it is no evidence, and the run stops instead.
 - **Protected by a missing grant** when the log shows the attempt refused with `42501` by
-  PostgreSQL's privilege check, and the catalog shows `anon` lacks the read grant on the table. The
-  basis names the missing grant.
+  PostgreSQL's privilege check on this table, and the catalog shows `anon` holds the read privilege
+  on neither the table nor any of its columns. The basis names the missing grant.
 - **Protected by row-level security** when the answer holds no row and no error, and all of these
   hold:
   1. the direct view found at least one row in the table at the moment of the attempt;
@@ -92,7 +110,8 @@ neither of them.
   shows the write landed; a success status can come from a trigger that dropped it.
 - **Protected** when the log shows the attempt refused with `42501` by PostgreSQL's row-level security
   check (the row failed the insert policies) or by its privilege check while the catalog shows `anon`
-  lacks the insert grant, and the direct view finds no new row. Why: these are the two refusals that
+  holds the insert privilege on neither the table nor any of its columns, and the direct view finds
+  no new row. Why: these are the two refusals that
   mean "the visitor may not create this row"; any other refusal (a constraint, a trigger, a unique
   key) only says this particular row was unacceptable.
 - After a refusal by row-level security, the value search tries further rows; the insert is protected
@@ -111,13 +130,19 @@ The two follow the same rules; only the change looked for differs.
 - **Protected** when the direct view finds every row unchanged and either:
   - the log shows the attempt refused with `42501` by PostgreSQL's row-level security check (an
     update's new row failed the policies) or by its privilege check while the catalog shows `anon`
-    lacks the grant; or
+    holds the privilege on neither the table nor any of its columns (for delete, on the table); or
   - the attempt's statement ran without error and reached no row, the direct view found rows in the
     table, the attempt carried no filter of its own, and PostgreSQL says row-level security applies to
     that statement.
 
   Why: row-level security hides rows from an update or delete the way it hides them from a read,
   silently, so the silent case needs the same four facts as an empty read.
+- After an update is refused by row-level security, the value search tries further new values, as
+  for insert; the update is protected only when every value it tries is refused by row-level
+  security or the privilege check and every row is still unchanged. Why: a policy whose check admits
+  only certain new values still lets whoever sends those values rewrite the rows, in every other
+  column too. A delete writes no new row, so no policy can refuse it for its values and it has no
+  value search.
 - An update or delete is judged protected only from an attempt with no filter. Why: a filter naming
   a row needs the visitor to be able to see that row, so a table whose only policy allows writing
   would look protected to an attempt by key, while an attempt without a filter changes every row.
@@ -177,10 +202,20 @@ security switched off.
 
 ### Read a table the anonymous visitor holds no grant on (`anon-read`)
 
-Given a table whose read grant has been taken from `anon`,
+Given a table on which `anon` holds the read privilege on neither the table nor any of its columns,
 when the user runs rlsentry,
 then its read is protected, and the basis names the missing grant.
 Shown by: a test checks the verdict and that the basis names the grant.
+
+### Read a table whose read grant covers only some columns (`anon-read`)
+
+Given a table with row-level security off on which `anon` holds no table read grant but holds the
+read privilege on some of its columns,
+when the user runs rlsentry,
+then its read is exposed, the basis names the columns the visitor read, the evidence holds only
+those columns, and the command exits `1`.
+Shown by: a test on a lab schema with such column grants checks the verdict, the columns named in
+the basis and the evidence, and the exit code.
 
 ### An empty answer the database does not explain stops the run (`anon-read`)
 

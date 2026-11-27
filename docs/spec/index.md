@@ -44,9 +44,11 @@ task that builds it. The order of those tasks is in [the roadmap](../roadmap.jso
 - **operation**: one of read, insert, update and delete. Each is attacked on its own, on every
   table.
 - **attempt**: the one request rlsentry sends as the anonymous visitor to try an operation on a
-  table (after a refused insert, each row of the value search is an attempt too).
+  table (after an insert or update refused by row-level security, each try of the value search is an
+  attempt too).
 - **row-level security**: PostgreSQL's per-row access rules on a table; **policy**: one such rule.
-  **grant**: a table privilege a role holds or lacks, checked before any policy.
+  **grant**: a privilege a role holds or lacks on a whole table or on some of its columns, checked
+  before any policy.
 - **verdict**: the answer for one table and one operation. There are exactly two:
   - **exposed**: the attempt really did what the visitor wanted, as the direct view confirms;
   - **protected**: the attempt was refused or kept from every row, as the database's own record of
@@ -57,9 +59,9 @@ task that builds it. The order of those tasks is in [the roadmap](../roadmap.jso
 - **the database's own account**: what PostgreSQL itself records about an attempt (its server log
   of that statement, with the error code and the place in PostgreSQL's own code that raised it) and
   what its catalog says about the table. It is defined in [Verdicts and evidence](verdicts.md).
-- **value search**: once an insert has been refused, the further attempts rlsentry makes with rows
-  whose values come from the table's own column defaults, checks and policies, looking for a row
-  the insert policy lets in.
+- **value search**: once an insert or an update has been refused by row-level security, the further
+  attempts rlsentry makes with new rows (insert) or new values (update) built from the table's own
+  column defaults, checks and policies, looking for one the policies let in.
 - **the lab**: the bundled schemas, each with a deliberate flaw and named for it.
 - **`--target`**: the command-line option naming a live project. It is refused until the
   `live-probe` task.
