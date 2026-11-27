@@ -1,5 +1,5 @@
 {"tasks": [
-  {"slug": "v3-spec", "goal": "A reader finds in docs/spec/ what rlsentry v3 is, its threat model, every area's scenarios for the next task, and this roadmap; documents only.", "depends_on": [], "pr": null, "done": false},
+  {"slug": "v3-spec", "goal": "A reader finds in docs/spec/ what rlsentry v3 is, its threat model, every area's scenarios for the next task, and this roadmap; documents only.", "depends_on": [], "pr": "https://github.com/pitaya943/rlsentry-v3/pull/19", "done": true},
   {"slug": "anon-read", "goal": "A user runs rlsentry on a folder of migrations or the lab and gets, per table, whether an anonymous visitor really read rows in a throwaway local copy, with evidence, as text and JSON; a live target is refused.", "depends_on": ["v3-spec"], "pr": null, "done": false},
   {"slug": "anon-write", "goal": "The same run also says, per table, whether an anonymous visitor really inserted, updated or deleted rows, including inserts a policy accepts only for chosen values; the whole lab shows every verdict kind.", "depends_on": ["anon-read"], "pr": null, "done": false},
   {"slug": "html-report", "goal": "Each run can also write one self-contained HTML report that opens offline and can be published as a Claude Artifact unchanged.", "depends_on": ["anon-write"], "pr": null, "done": false},
