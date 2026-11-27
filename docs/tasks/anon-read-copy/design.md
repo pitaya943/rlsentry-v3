@@ -11,7 +11,7 @@ part wrong changes it here with a trail row; the scenarios do not change.
 | `cli.py` | argument parsing, the order of a run, the exit code, refusing `--target` before anything else | S-1, S-2, S-5 (live target) |
 | `inputs.py` | turning a folder or lab name into an ordered list of migration files and the exposed schemas (`supabase/config.toml` `[api] schemas`, else `public`, `graphql_public`); the input stops of #23 | S-1, S-2, S-4 |
 | `versions.py` | reading `--version` of `postgres` and `postgrest`, the accepted series, and the server's own version once running | S-7 |
-| `copy.py` | the throwaway copy: run directory, free loopback ports, `initdb`, the server, Supabase's setup, applying migrations, the settings check, starting PostgREST, destroying all of it however the run ends, and removing copies of dead runs | S-5, S-6 (setup), S-7 (server version) |
+| `copy.py` (with `pg.py`, `statements.py`) | the throwaway copy: run directory, a free loopback port for PostgREST, `initdb`, the server, Supabase's setup, applying migrations, the settings check, starting PostgREST, destroying all of it however the run ends, and removing copies of dead runs | S-5, S-6 (setup), S-7 (server version) |
 | `supabase_setup.sql` (package data) | roles, schemas, `auth.users` and `auth.uid()/role()/jwt()`, default privileges, listed extensions, the extension guard | S-5 |
 | `seed.py` | the fake rows: order by foreign keys, values the rules name, `auth.users` first | S-5, S-6 |
 | `attack.py` | the HTTP requests (anon key and no key, `Accept-Profile`, no redirect, 30 s timeout) and the JWT | S-1, S-4 |
@@ -33,8 +33,8 @@ ports are owned by one `Copy` object; nothing else starts or stops a process.
 3. `versions.py` checks both programs' `--version` against the series; outside it stops, nothing
    built.
 4. `Copy.__enter__` removes copies left by dead runs (saying so), makes the run directory, picks
-   ports, runs `initdb` with a superuser that is not `postgres`, starts the server on loopback and a
-   socket in the run directory, confirms the server's version, loads Supabase's setup as the
+   ports, runs `initdb` with a superuser that is not `postgres` (`rlsentry`), starts the server on a
+   socket in the run directory only, confirms the server's version, loads Supabase's setup as the
    superuser, then applies each migration as the role `postgres` (not a superuser; `BYPASSRLS`). A
    failing statement stops, naming the file and the statement.
 5. The settings check reads `pg_db_role_setting` for every role setting and every `pgrst.*`; the
@@ -66,33 +66,43 @@ ports are owned by one `Copy` object; nothing else starts or stops a process.
 
 ## Talking to PostgreSQL and PostgREST
 
-- **No third-party runtime dependency.** The direct view goes through the `psql` binary of the same
-  installation (`psql -X -A -t -v ON_ERROR_STOP=1` with JSON output built by `json_agg` in SQL), and
-  HTTP through `http.client`. Why: fewer things to install in a tool meant for teaching, and
+- **No third-party runtime dependency.** The direct view and the migrations go through `pg.py`, a
+  small client of PostgreSQL's simple query protocol over the copy's socket (`Copy.connect(user)`;
+  build JSON with `json_agg` in SQL where a result needs structure), and HTTP through
+  `http.client`. (T-01 replaced `psql`: it acts on backslash commands inside a migration file, so
+  `\! <command>` in a migration would run on the machine; the server's protocol carries SQL only.) Why: fewer things to install in a tool meant for teaching, and
   `http.client` never follows redirects on its own, which is the rule we need. Tests may use
   `pytest` and `jsonschema` as development dependencies.
-- **Migrations are applied with `psql -v ON_ERROR_STOP=1 -1 -f <file>`** as the role `postgres`, so
-  PostgreSQL's own parser reads them and rlsentry never splits SQL itself; the failing statement is
-  taken from psql's error output (`psql:<file>:<line>: ERROR: ...`) and the file's text at that line.
+- **Migrations are applied statement by statement, each file in one transaction,** as the role
+  `postgres`, as the Supabase CLI does: `statements.py` cuts a file at top-level `;` (honouring
+  quotes, dollar quotes, comments and `BEGIN ATOMIC` bodies), so a failure names the exact
+  statement and its line even where the server's error carries no position (a refused
+  `COPY ... TO '<file>'`). A wrong cut can only make a piece fail, which stops the run.
 
 ## Running as root
 
 PostgreSQL refuses to start as root, and this session (and many containers) runs as root. When the
-effective user is root, `Copy` runs `initdb`, `postgres`, `psql` and `postgrest` as an unprivileged
+effective user is root, `Copy` runs `initdb`, `postgres` and `postgrest` as an unprivileged
 account (the existing `postgres` system account if there is one, else `nobody`), through
-`setpriv`/`preexec_fn` setuid and setgid, and gives that account alone the run directory (mode
+`subprocess`'s `user`/`group`/`extra_groups`, and gives that account alone the run directory (mode
 `0700`). When not root, it runs them as the user. Why: this narrows what the server process can
 touch, which is the threat model's rule 2 for local processes, instead of widening it; refusing root
 would make the tool unusable in the very environment the brief names.
 
 ## Where a run lives, and finding dead runs
 
-Each run gets `<tmp>/rlsentry-runs/<run-id>/` holding `data/`, `sock/`, `postgrest.conf` and
-`run.json` (the pid of the rlsentry process, its start time, the server's and PostgREST's pids,
-the ports). The parent directory is created `0700` (or `0711` when root, so the server account can
-reach its own run directory). A later run treats an entry whose rlsentry pid is not alive (or alive
-with another start time) as dead: it kills that run's server and PostgREST if they are still the
-processes `run.json` names, removes the directory, and prints which run it removed. Ports are
+Each run gets `<tmp>/rlsentry-runs-<uid>/<run-id>/` holding `data/`, `sock/` and the programs'
+logs, and, beside it, `<run-id>.json` (the pid of the rlsentry process and its start time, the
+server's and PostgREST's pids and start times, PostgREST's port), written before the directory and
+outside it, so the server's account, which owns the directory, cannot change what a later run
+kills. The parent directory is created `0700` (or `0711` when root, so the server account can
+reach its own run directory). A later run treats a record whose rlsentry pid is not alive (or alive
+with another start time) as dead: it stops that run's server (`SIGQUIT`) and PostgREST if they are
+still the processes the record names, kills any process still working in its directory
+(PostgreSQL's backends each start a session of their own, so process groups do not reach them),
+removes the directory, and prints which run it removed. The database server listens on no TCP
+port: only its socket, in the run's `0700` socket directory, with `trust` for local connections
+only; PostgREST reaches it there. PostgREST's configuration is its environment, not a file. Ports are
 chosen by binding port `0` on `127.0.0.1` and releasing it right before start; a start that fails
 on a taken port retries with new ports. Two runs never share a directory, socket or port.
 
@@ -156,13 +166,13 @@ the cleanup rules between two places. **Parsing migration SQL to seed and to fin
 Rejected: the spec says verdicts rest on running, and the catalog already holds what the migrations
 built, including what a `DO` block did; reading SQL text would miss that. **A Python PostgreSQL
 driver (psycopg).** Considered: simpler result handling, but one more compiled dependency to install
-and nothing it gives that `psql` with JSON output does not; the builder may switch with a trail row
-if `psql` proves too clumsy.
+and nothing it gives that `pg.py` with JSON output does not; a builder may switch with a trail row
+if `pg.py` proves too clumsy.
 
 ## Testing
 
 `pytest` under `tests/`, every test building a real copy; a session-scoped check at the start fails
-the whole suite (not skips) naming the program when `postgres`, `initdb`, `psql` or `postgrest` is
+the whole suite (not skips) naming the program when `postgres`, `initdb` or `postgrest` is
 missing (S-10). S-7's only stand-in is a script on `PATH` that prints another version. Lab tests
 compare each schema's run with its `statement.json`. `test_command` becomes
 `python3 -m pytest -q` (or what the builder records).

@@ -26,8 +26,8 @@ Every rule here was decided by `v3-spec`.
   schema migrations commonly name (its users table, and the functions that return the request's user
   id, role and claims), defined as Supabase defines them; and Supabase's default privileges, by which
   every table a migration creates in `public` is granted to `anon`, `authenticated` and
-  `service_role` unless a migration revokes it. The `anon-read` task names, in this area, the release
-  of Supabase's setup the copy follows. Why: a project's migrations are written against that setup.
+  `service_role` unless a migration revokes it. The copy follows the setup of Supabase's
+  `supabase/postgres` image of the 15.8.1 line (`src/rlsentry/supabase_setup.sql`). Why: a project's migrations are written against that setup.
   Above all the default privileges: on Supabase a new table is readable by `anon` until a policy or a
   revoke says otherwise, so a copy without them would report a missing grant where the real project
   has none, a false protected.
