@@ -6,8 +6,8 @@ reason here.
 
 ## Scenarios
 
-None hold yet: nothing is built. The behaviour that enforces each rule below is written as
-scenarios in the area that owns it (see [Which area enforces each rule](#which-area-enforces-each-rule)).
+None of its own. The behaviour that enforces each rule below is written as scenarios in the area
+that owns it, under Scenarios once built (see [Which area enforces each rule](#which-area-enforces-each-rule)).
 
 ## Rules
 
@@ -140,3 +140,5 @@ the table above names, marked with the task that builds them.
 ## Changed by
 
 - `v3-spec`: the first version of this area.
+- `anon-read-copy`: no rule changed; the scenarios that enforce rules 1 to 5 for a read now hold
+  in the areas that own them, and rule 6's are `anon-read-protected`'s.

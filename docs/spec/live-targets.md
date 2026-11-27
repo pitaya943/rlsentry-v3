@@ -5,8 +5,17 @@ its own copy.
 
 ## Scenarios
 
-None hold yet: nothing is built. The scenario `anon-read` builds is under
-[Not yet built](#not-yet-built).
+"Shown by" names the test that shows a scenario hold.
+
+### A live target is refused
+
+Given a project URL and a key,
+when the user runs rlsentry with `--target` naming that URL,
+then nothing is built and no request or name lookup is made, the message says live targets are not
+available yet, and the command exits `2`.
+Shown by: `tests/test_live_target.py::test_a_live_target_is_refused_and_the_watched_address_gets_nothing`,
+which points `--target` at an address it watches and sees nothing arrive there, and
+`::test_a_live_target_makes_no_name_lookup`.
 
 ## Rules
 
@@ -29,20 +38,11 @@ decides how it is kept.
 
 ## Not yet built
 
-"Shown by" says how a person or a test sees the scenario hold. Probing a live project is
-`live-probe`'s: a user who proves they own a live Supabase project, and opts in for the run, learns
-what an anonymous visitor could read or change there, without any write to real data and with no
-real value in the report.
-
-### A live target is refused (`anon-read`)
-
-Given a project URL and a key,
-when the user runs rlsentry with `--target` naming that URL,
-then nothing is built and no request or name lookup is made, the message says live targets are not
-available yet, and the command exits `2`.
-Shown by: a test points `--target` at an address it watches and checks that nothing arrives there,
-the message and the exit code.
+Probing a live project is `live-probe`'s: a user who proves they own a live Supabase project, and
+opts in for the run, learns what an anonymous visitor could read or change there, without any write
+to real data and with no real value in the report. Its brief writes the scenarios.
 
 ## Changed by
 
 - `v3-spec`: the first version of this area.
+- `anon-read-copy`: the refusal of `--target`, built; its scenario moved up to Scenarios.
