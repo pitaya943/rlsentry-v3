@@ -11,6 +11,7 @@ parallel could not see each other's choices in the shared modules. The shape is 
 | [T-03](tickets/T-03.md) the text summary, the JSON report and its schema, escaping, stopped-run reports, reproducible reports | S-1 (reports), S-3 | T-02 | high (raised: its seeding change reaches the evidence) |
 | [T-04](tickets/T-04.md) the lab: schemas, statements, `rlsentry lab`, a test of every schema; README; `try-rlsentry` skill | S-8 | T-03 | medium |
 | [T-05](tickets/T-05.md) the spec moved to what was built (S-9), the one-definition check and `checks.md` sentence (S-11) | S-9, S-11 | T-04 | low |
+| [T-06](tickets/T-06.md) an interrupted run exits 2, as the spec says (fix round 1 for the pull request into main) | S-5 *The copy is gone when a run ends*; verdicts Exit codes | T-05 | medium |
 
 T-01 and T-02 hold the brief's two critical areas (the safety boundary; the exposed verdict and its
 evidence): each is designed here before it is built and verified on its own before it lands. T-03
