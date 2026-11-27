@@ -89,3 +89,22 @@ def test_the_database_settings_a_migration_makes_do_not_blind_the_settings_check
     err = stopped(tmp_path, {"001_notes.sql": OWNER_TABLE, "002.sql": "alter role anon set statement_timeout = '1s';",
                              "003.sql": shadow})
     assert "statement_timeout = '1s' on role anon" in err
+
+
+SEEDING_TRIGGER = """
+create table notes (id int primary key, body text);
+create function public.late() returns trigger language plpgsql as $$
+begin
+  execute 'alter role anon set statement_timeout = ''5s''';
+  execute 'alter database postgres set pgrst.db_schemas = ''public''';
+  return new;
+end $$;
+create trigger late before insert on notes for each row execute function public.late();
+"""
+
+
+def test_settings_a_migrations_trigger_makes_while_the_copy_is_seeded_stop_the_run(tmp_path):
+    # Seeding runs the migrations' triggers: what they set is migration code's doing all the same.
+    err = stopped(tmp_path, {"001_notes.sql": SEEDING_TRIGGER})
+    assert "statement_timeout = '5s' on role anon" in err
+    assert "pgrst.db_schemas = 'public' on database postgres" in err
