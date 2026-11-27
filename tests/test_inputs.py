@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from conftest import assert_no_copy_left, records, rlsentry, write
+from conftest import assert_no_copy_left, outcomes, records, rlsentry, write
 
 
 def test_a_folder_without_sql_files_stops(tmp_path):
@@ -35,10 +35,10 @@ def test_a_supabase_projects_folder_uses_only_its_migrations_and_says_so(tmp_pat
         "stray.sql": "neither is this;",
     })
     done = rlsentry(folder)
-    assert done.returncode == 0, done.stderr
+    assert done.returncode == 1, done.stderr
     assert f"using the migrations in {folder / 'supabase' / 'migrations'}" in done.stderr
     assert "copy built from 1 migration(s)" in done.stdout
-    assert "public.notes" in done.stdout
+    assert "read public.notes: exposed" in done.stdout
     assert_no_copy_left()
 
 
@@ -48,9 +48,8 @@ def test_the_projects_configuration_names_the_exposed_schemas(tmp_path):
         "supabase/migrations/001.sql": "create schema api; create table api.items (id int); create table public.a (id int);",
     })
     done = rlsentry(folder)
-    assert done.returncode == 0, done.stderr
     assert "exposed schemas: public, api" in done.stdout
-    assert done.stdout.index("api.items") < done.stdout.index("public.a")
+    assert list(outcomes(done.stdout)) == ["api.items", "public.a"]
 
 
 def test_without_configuration_supabases_default_schemas_are_exposed(tmp_path):
@@ -69,8 +68,8 @@ def test_files_are_applied_in_name_order_and_the_later_ones_effect_shows(tmp_pat
     os.utime(folder / "10_create.sql", (now, now))
     os.utime(folder / "2_open.sql", (now - 100, now - 100))
     done = rlsentry(folder)
-    assert done.returncode == 0, done.stderr
-    assert "public.secrets (row-level security off)" in done.stdout
+    assert done.returncode == 1, done.stderr
+    assert "read public.secrets: exposed" in done.stdout
     assert_no_copy_left()
 
 
@@ -101,6 +100,7 @@ def test_the_direct_view_shows_what_the_copy_holds_whatever_the_database_setting
         "001.sql": "create table secrets (id int primary key);\nalter table secrets enable row level security;",
         "002.sql": shadow,
     }))
-    assert done.returncode == 0, done.stderr
-    assert "public.secrets (row-level security on)" in done.stdout
+    # attacked, so the direct view found it: row-level security on and no policy gives no verdict
+    assert done.returncode == 2, done.stderr
+    assert "read public.secrets: no verdict" in done.stdout
     assert_no_copy_left()

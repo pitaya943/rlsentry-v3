@@ -81,7 +81,7 @@ def real_version(program: Path, pattern: str) -> str:
 
 def test_within_the_series_the_run_names_the_exact_versions(project):
     done = rlsentry(project)
-    assert done.returncode == 0, done.stderr
+    assert done.returncode == 1, done.stderr  # its one table is exposed
     pg = real_version(REAL_POSTGRES, r"\(PostgreSQL\) (\S+)")
     rest = real_version(REAL_POSTGREST, r"PostgREST (\S+)")
     assert f"PostgreSQL {pg} and PostgREST {rest}" in done.stdout
@@ -92,7 +92,7 @@ def test_the_running_servers_version_decides(public_dir, project):
     stand_in(public_dir, "postgres", "postgres (PostgreSQL) 16.99", REAL_POSTGRES)
     stand_in(public_dir, "postgrest", "PostgREST 12.2.99", REAL_POSTGREST)
     done = rlsentry(project, env={"PATH": f"{public_dir}:{os.environ['PATH']}"})
-    assert done.returncode == 0, done.stderr
+    assert done.returncode == 1, done.stderr  # its one table is exposed
     pg = real_version(REAL_POSTGRES, r"\(PostgreSQL\) (\S+)")
     rest = real_version(REAL_POSTGREST, r"PostgREST (\S+)")
     assert f"PostgreSQL {pg} and PostgREST {rest}" in done.stdout

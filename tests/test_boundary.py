@@ -130,8 +130,8 @@ def test_listed_extensions_are_there_for_migrations_written_for_supabase(tmp_pat
         "token text default encode(gen_random_bytes(8), 'hex'));"
     )})
     done = rlsentry(folder)
-    assert done.returncode == 0, done.stderr
-    assert "public.t" in done.stdout
+    assert done.returncode == 1, done.stderr
+    assert "read public.t: exposed" in done.stdout
 
 
 # The guard runs inside the migrations' own session, so it must not resolve a name, a function or

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -111,3 +112,23 @@ def assert_no_copy_left() -> None:
     left = list(runs_root().iterdir()) if runs_root().is_dir() else []
     assert left == [], f"left in {runs_root()}: {left}"
     assert processes_in_runs() == []
+
+
+def outcomes(stdout: str) -> dict[str, dict]:
+    """The run's outcomes as printed, in order: table -> verdict (None for no verdict), the rest of
+    its line (basis or reason) and, when exposed, the evidence row."""
+    out: dict[str, dict] = {}
+    last = None
+    for line in stdout.splitlines():
+        m = re.match(r"read (\S+): (exposed|no verdict); (?:basis: )?(.*)$", line)
+        if m:
+            last = out[m[1]] = {"verdict": "exposed" if m[2] == "exposed" else None, "text": m[3]}
+        elif line.startswith("  evidence: ") and last is not None:
+            last["evidence"] = json.loads(line[len("  evidence: "):])
+    return out
+
+
+def run(tmp_path, files: dict[str, str], name: str = "p") -> tuple[subprocess.CompletedProcess, dict]:
+    done = rlsentry(write(tmp_path / name, files))
+    assert_no_copy_left()
+    return done, outcomes(done.stdout)

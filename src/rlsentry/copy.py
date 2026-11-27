@@ -21,7 +21,7 @@ import time
 from importlib import resources
 from pathlib import Path
 
-from . import pg, statements
+from . import direct, pg, seed, statements
 from .inputs import Project
 from .stops import Stop, printable
 from .versions import POSTGRESQL, POSTGREST, Programs, Versions, accept, parse_postgrest
@@ -224,8 +224,13 @@ class Copy:
         with self.connect(MIGRATIONS_ROLE) as conn:
             for path in self.project.migrations:
                 self._apply(conn, path)
+        with self.connect() as admin, self.connect(MIGRATIONS_ROLE) as migrations:
+            seed.fill(admin, migrations, direct.table_oids(admin, self.project.exposed_schemas),
+                      direct.users_oid(admin))
+        # After seeding, which runs the migrations' triggers: the last migration code that runs as
+        # the migrations' role. PostgREST's reads are read-only, so nothing can set a setting later.
         self._check_settings()
-        self._start_rest()
+        self._start_rest()  # after seeding: PostgREST reads the schema once, at start
 
     def _make_run_directory(self) -> None:
         root = runs_root()
