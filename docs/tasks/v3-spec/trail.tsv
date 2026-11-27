@@ -23,3 +23,4 @@ time	who	decision	why	evidence
 2026-11-27T06:53Z	owner	brief-approved 398eaa5c6b653c886d17bb745dba9a28b50466ee	owner said yes approved	conversation 2026-11-27
 2026-11-27T06:55Z	owner	fix-round T-01	owner allowed one more fix round with the narrowed brief	https://github.com/pitaya943/rlsentry-v3/issues/8#issuecomment-7211920110
 2026-11-27T06:55Z	orchestrator	T-01 ticket re-cut to the re-approved brief (write protected rules out)	brief changed at 398eaa5	docs/tasks/v3-spec/tickets/T-01.md
+2026-11-27T07:04Z	orchestrator	needs-owner #9	T-01 fix round 4 verdict FAIL: defect 8 (PostgREST db-pre-request)	https://github.com/pitaya943/rlsentry-v3/pull/6#issuecomment-7212110573
