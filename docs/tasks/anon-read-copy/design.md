@@ -38,9 +38,12 @@ ports are owned by one `Copy` object; nothing else starts or stops a process.
    socket in the run directory only, confirms the server's version, loads Supabase's setup as the
    superuser, then applies each migration as the role `postgres` (not a superuser; `BYPASSRLS`). A
    failing statement stops, naming the file and the statement.
-5. The settings check reads `pg_db_role_setting` for every role setting and every `pgrst.*`; the
-   rules of the brief's Assumptions decide which stop.
-6. `seed.py` fills `auth.users`, then every table of an exposed schema in foreign-key order.
+5. `seed.py` fills `auth.users`, then every table of an exposed schema in foreign-key order. Seeding
+   runs the migrations' triggers, so it is still migration code running.
+6. The settings check reads `pg_db_role_setting` for every role setting and every `pgrst.*`; the
+   rules of the brief's Assumptions decide which stop. It runs after the last moment migration code
+   can run as the migrations' role (after seeding), right before PostgREST starts, so nothing a
+   migration's code sets escapes it (T-02 verdict 1).
 7. `Copy` starts PostgREST (`db-config = false`, `db-anon-role = anon`, the exposed schemas,
    `db-extra-search-path = public, extensions`, a JWT secret made up in memory and passed through
    the environment or a file in the run directory readable only by the run, never kept).
