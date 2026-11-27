@@ -269,10 +269,14 @@ CLOCK = {"timestamptz": "2024-02-01 00:00:00+00", "timestamp": "2024-02-01 00:00
 
 
 def _pin_clock(admin: pg.Connection, tables: list[Table], since: str) -> None:
-    """Every date or time value a trigger or default took from the clock while seeding (one within a
-    day of the seeding, which no made-up value is) is set to a fixed one, as the superuser with
-    triggers off, so the update itself reads no clock. A row whose checks refuse it is left as it is,
-    and so is a column of a foreign key, which triggers off would no longer guard."""
+    """Every date or time value a trigger or default took from the clock while seeding is set to a
+    fixed one, as the superuser with triggers off, so the update itself reads no clock.
+
+    A clock reading is told by when it falls: a timestamptz between the start of seeding and now; a
+    date or a timestamp within a day of that, since its time zone is the session's. A value seeding
+    chose is never one: a made-up value is from 2024, and a value a rule names is left as it is
+    however near the day it falls, since the verdict rests on it. A row whose checks refuse the update
+    is left as it is, and so is a column of a foreign key, which triggers off would no longer guard."""
     keyed = {(t.oid, c) for t in tables for cols, _, _ in t.keys for c in cols}
     keyed |= {(parent, c) for t in tables for _, parent, pcols in t.keys for c in pcols}
     admin.execute("set session_replication_role = replica")
@@ -282,11 +286,17 @@ def _pin_clock(admin: pg.Connection, tables: list[Table], since: str) -> None:
                 if c.skip or c.base not in CLOCK or (table.oid, c.name) in keyed:
                     continue
                 col, base = quote_ident(c.name), f"pg_catalog.{c.base}"
+                slack = "" if c.base == "timestamptz" else " interval '1 day'"
+                window = (f"{col}::{base} between ({quote_literal(since)}::pg_catalog.timestamptz"
+                          f"{' -' + slack if slack else ''})::{base} "
+                          f"and (pg_catalog.clock_timestamp(){' +' + slack if slack else ''})::{base}")
+                named = table.named.get(c.name, [])
+                if named:  # a literal that is not of the type makes the update fail: nothing is pinned
+                    window += (f" and {col}::{base} <> all (array["
+                               + ", ".join(f"{quote_literal(v)}::{base}" for v in named) + "])")
                 try:
                     admin.execute(
-                        f"update {table.qualified} set {col} = {quote_literal(CLOCK[c.base])} "
-                        f"where {col}::{base} between ({quote_literal(since)}::pg_catalog.timestamptz "
-                        f"- interval '1 day')::{base} and (pg_catalog.clock_timestamp() + interval '1 day')::{base}"
+                        f"update {table.qualified} set {col} = {quote_literal(CLOCK[c.base])} where {window}"
                     )
                 except pg.PgError:
                     pass

@@ -1,6 +1,7 @@
 """S-5 (seeding, grants, two runs at once) and S-6: the copy holds fake rows before the attack."""
 
 import json
+from datetime import datetime, timezone
 
 from conftest import assert_no_copy_left, outcomes, run, start_rlsentry, write
 from rlsentry import inputs, versions
@@ -98,3 +99,29 @@ def test_tables_that_reference_supabases_users_are_seeded(tmp_path):
     assert found["public.memberships"]["verdict"] == "exposed"
     assert found["public.profiles"]["evidence"]["id"] in ids
     assert json.dumps(found).count("rlsentry-fake") >= 1
+
+
+def test_a_date_or_time_a_rule_names_is_held_even_on_the_day_of_the_run(tmp_path):
+    # Seeding fixes clock readings so two runs agree (T-03); a value seeding chose because a rule
+    # names it is not a clock reading, however near the run's day it is, and stays as the rule says.
+    today = datetime.now(timezone.utc).date().isoformat()
+    done, found = run(tmp_path, {"001.sql": f"""
+create table posts (id int primary key, body text, publish_on date);
+alter table posts enable row level security;
+create policy today_only on posts for select to anon using (publish_on = '{today}');
+create table slots (id int primary key, starts_at timestamp);
+alter table slots enable row level security;
+create policy today_only on slots for select to anon using (starts_at = '{today} 00:00:00');
+create table events (id int primary key, at timestamptz);
+alter table events enable row level security;
+create policy today_only on events for select to anon using (at = '{today} 00:00:00+00');
+create table deadlines (id int primary key, due_on date not null check (due_on >= '{today}'));
+"""})
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert found["public.posts"]["evidence"]["publish_on"] == today
+    assert found["public.slots"]["evidence"]["starts_at"] == f"{today}T00:00:00"
+    assert datetime.fromisoformat(found["public.events"]["evidence"]["at"]) == datetime.fromisoformat(
+        f"{today}T00:00:00+00:00")
+    assert found["public.deadlines"]["evidence"]["due_on"] == today, "the check's value, not one it refuses"
+    for table in ("posts", "slots", "events"):
+        assert found[f"public.{table}"]["text"].endswith("1 of the table's 2 rows"), found[f"public.{table}"]
