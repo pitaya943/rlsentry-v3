@@ -6,3 +6,6 @@ time	who	decision	why	evidence
 2026-11-27T08:03Z	orchestrator	corrections proposed: S-10 (real database, count 2) and S-11 (one definition, count 2) here; the protected-rule guard (count 5) in anon-read-protected, where protected is built	learning.md, Correcting a class	docs/tasks/anon-read-copy/brief.md
 2026-11-27T08:03Z	orchestrator	later issues proposed for this task: #20, #22, #23; for anon-read-protected: #14, #21	they touch these areas	docs/tasks/anon-read-copy/brief.md
 2026-11-27T08:05Z	orchestrator	reader read brief at 5d64a49; owner agreed six fixes (run order and stop, non-exposed answers, key vs keyless, version stand-in, role settings that stop, terms)	fresh read found gaps a builder would guess at	docs/tasks/anon-read-copy/brief.md
+2026-11-27T08:08Z	orchestrator	second reader read brief at 0113f48; owner accepted five fixes without a third read	after a second read the rest is the owner's call	docs/tasks/anon-read-copy/brief.md
+2026-11-27T08:08Z	owner	brief-approved e646b3ec50fb91ba776fd1e3cba9f52e20d70337	owner said accepted	conversation 2026-11-27
+2026-11-27T08:08Z	owner	roadmap-approved 5d64a49696d6007f66762dd2453efb8cf983ce14	owner approved the split of anon-read with the brief	docs/roadmap.json
