@@ -1,0 +1,10 @@
+{
+  "flaw": "a table created without turning on row-level security",
+  "explanation": "On Supabase a new table in public is granted to anon by default, so until row-level security is turned on, anyone with the project's URL reads every row.",
+  "reads": [
+    {"table": "public.notes", "verdict": "exposed", "because": "row-level security off",
+     "requests": ["anon key", "no key"], "rows": "all", "columns": null}
+  ],
+  "exit_code": 1,
+  "stop": null
+}

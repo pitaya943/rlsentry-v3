@@ -34,6 +34,14 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("project", nargs="?", help="a Supabase project's folder, or a folder of .sql files")
     p.add_argument("--json", metavar="FILE", type=Path, help="also write the JSON report to FILE")
     p.add_argument("--target", metavar="URL", help="a live project: refused, not available yet")
+    p.epilog = "rlsentry lab lists the bundled lab schemas; rlsentry lab NAME [--json FILE] runs one."
+    return p
+
+
+def _lab_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog="rlsentry lab", description="List the lab schemas, or run one by name.")
+    p.add_argument("name", nargs="?", help="the lab schema to run; leave out to list them")
+    p.add_argument("--json", metavar="FILE", type=Path, help="also write the JSON report to FILE")
     return p
 
 
@@ -42,6 +50,9 @@ def say(message: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["lab"]:
+        return _lab(_lab_parser().parse_args(argv[1:]))
     args = _parser().parse_args(argv)
     if args.target is not None:
         # Refused before anything else: the URL is never parsed, looked up or connected to.
@@ -51,9 +62,24 @@ def main(argv: list[str] | None = None) -> int:
         _parser().print_usage(sys.stderr)
         say("name a project's folder")
         return EXIT_STOPPED
+    return _guarded(lambda: inputs.resolve(args.project), args.json)
+
+
+def _lab(args) -> int:
+    if args.name is None:
+        schemas = inputs.lab()
+        width = max(map(len, schemas), default=0)
+        for name, flaw in schemas.items():
+            print(f"{name.ljust(width)}  {flaw}")
+        return 0
+    return _guarded(lambda: inputs.resolve_lab(args.name), args.json)
+
+
+def _guarded(project, json_path: Path | None) -> int:
+    """A run, with every way it can end turned into its exit code."""
     signal.signal(signal.SIGTERM, _on_sigterm)
     try:
-        return _run(args.project, args.json)
+        return _run(project(), json_path)
     except Stop as stop:
         say(f"stopped: {stop.reason}")
         return EXIT_STOPPED
@@ -65,9 +91,8 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_STOPPED
 
 
-def _run(arg: str, json_path: Path | None) -> int:
+def _run(project: inputs.Project, json_path: Path | None) -> int:
     ran_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    project = inputs.resolve(arg)
     for note in project.notes:
         say(note)
     programs, found = versions.check()
