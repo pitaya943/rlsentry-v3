@@ -13,8 +13,7 @@ from .copy import Copy
 from .report import Outcome, Result, Stopped, stop_message, summary, write_json
 from .stops import Stop, printable
 
-EXIT_STOPPED = 2
-EXIT_INTERRUPTED = 130
+EXIT_STOPPED = 2  # also an interrupted run: it could not finish (docs/spec/verdicts.md, exit codes)
 
 
 class Terminated(BaseException):
@@ -85,7 +84,7 @@ def _guarded(project, json_path: Path | None) -> int:
         return EXIT_STOPPED
     except (KeyboardInterrupt, Terminated):
         say("interrupted: the copy was destroyed")
-        return EXIT_INTERRUPTED
+        return EXIT_STOPPED
     except Exception as e:  # never exit 1 (exposed) or 0 on a failure of rlsentry's own
         say(f"failed: {type(e).__name__}: {e}; the copy was destroyed")
         return EXIT_STOPPED

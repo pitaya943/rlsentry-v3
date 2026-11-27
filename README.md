@@ -24,7 +24,8 @@ rlsentry path/to/project --json report.json
 The summary goes to standard output, and to `--json FILE` the JSON report, which follows
 `src/rlsentry/report.schema.json`. The exit code says what the run found: `0` no read exposed, `1`
 at least one read exposed, `2` the run stopped (some table got no verdict, or the copy could not be
-trusted); the summary's last line says which. A live project (`--target`) is refused.
+trusted) or was interrupted (Ctrl-C or SIGTERM, which destroy the copy first); the summary's last
+line, or for an interrupt the line on stderr, says which. A live project (`--target`) is refused.
 
 ## The lab
 

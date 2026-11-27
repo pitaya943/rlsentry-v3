@@ -10,8 +10,8 @@ description: Use to run rlsentry as a user does (on a folder of migrations, on a
 A command-line tool, `rlsentry`. It takes a folder of Supabase migrations (or `rlsentry lab NAME`),
 builds a throwaway PostgreSQL + PostgREST copy on this machine, reads every exposed table as the
 anonymous visitor, prints a text summary to stdout, the stop (if any) to stderr, and exits
-`0` (nothing exposed), `1` (something exposed) or `2` (stopped). `--json FILE` also writes the JSON
-report. There is no server to start yourself: each run starts and destroys its own copy, on ports it
+`0` (nothing exposed), `1` (something exposed) or `2` (stopped, or interrupted). `--json FILE` also
+writes the JSON report. There is no server to start yourself: each run starts and destroys its own copy, on ports it
 picks (loopback only), under `$TMPDIR/rlsentry-runs-<uid>/`.
 
 ## Run
@@ -41,8 +41,9 @@ python3 $S/drive.py 2 --target https://example.supabase.co  # a live target is r
 
 To try a project of your own, write a folder with `.sql` files (or `supabase/migrations/*.sql`) and
 pass it. Interrupting a run: start `rlsentry` in the background, send `SIGINT` or `SIGTERM` while it
-attacks, and check that nothing is left in `$TMPDIR/rlsentry-runs-<uid>/` and no `postgres` or
-`postgrest` process works there (`drive.py`'s `left_behind` does that check).
+attacks, and check that it exits `2` with `rlsentry: interrupted: the copy was destroyed` on
+stderr, that nothing is left in `$TMPDIR/rlsentry-runs-<uid>/` and that no `postgres` or `postgrest`
+process works there (`drive.py`'s `left_behind` does that check).
 
 ## Observe
 
