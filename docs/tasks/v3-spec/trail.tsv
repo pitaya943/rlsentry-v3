@@ -16,3 +16,4 @@ time	who	decision	why	evidence
 2026-11-27T06:27Z	orchestrator	needs-owner #7	T-01 fix rounds exhausted with defects 4-5 (headers, two meanings of protected)	https://github.com/pitaya943/rlsentry-v3/pull/6#issuecomment-7211528147
 2026-11-27T06:35Z	owner	protected is a bounded promise: every shape on the published list tried and refused; a policy depending on an input outside the list stops the run (exit 2) naming it	option 1 of #7	https://github.com/pitaya943/rlsentry-v3/issues/7#issuecomment-7211637933
 2026-11-27T06:35Z	owner	fix-round T-01	owner allowed one more fix round beyond the limit	https://github.com/pitaya943/rlsentry-v3/issues/7#issuecomment-7211637933
+2026-11-27T06:46Z	orchestrator	needs-owner #8	T-01 owner-granted round used; defects 6-7 remain	https://github.com/pitaya943/rlsentry-v3/pull/6#issuecomment-7211823557
