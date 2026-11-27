@@ -62,6 +62,8 @@ These are the demands, in the owner's terms. The spec turns each into scenarios 
 - Writing the scenarios of roadmap tasks after the next one in full: those tasks' briefs write
   them. This task writes in full only the scenarios of the next task (`anon-read`), and for every
   later task a one-line goal in the roadmap.
+- When an insert, an update or a delete is protected: decided by `anon-write`'s brief (owner
+  decision, #8), where it can be checked against running code.
 - The survey of related work itself (its own roadmap task, `related-work`).
 - Deciding live-probe's exact technique: its area states only the boundary (ownership proof,
   opt-in, no write to real data, no real values in any report); its own brief decides the rest.
@@ -94,7 +96,7 @@ area's rules enforce.
 Given the six demands above,
 when someone checks the spec and the roadmap against them,
 then every demand is covered either by a scenario in an area (under Not yet built, marked
-`anon-read`) or by the goal of a task in `docs/roadmap.json`, and demand 6 is split into its six
+`anon-read` or `anon-write`) or by the goal of a task in `docs/roadmap.json`, and demand 6 is split into its six
 named parts, each the goal of a task. A table in
 the task's folder (`docs/tasks/v3-spec/coverage.md`) maps each demand to those scenarios or tasks.
 
@@ -111,15 +113,27 @@ names of rlsentry's own code, and each one names how a person or a test would sh
 Given the merged spec,
 when someone opens its verdicts area,
 then it says, each with v3's own reason:
-- what makes a read, an insert, an update and a delete exposed, and what makes each protected;
-- for each operation, which signal from the database itself counts as its account of the refused
+- what makes a read, an insert, an update and a delete exposed, and what makes a read protected;
+- what a protected verdict promises: every request shape on a published list was tried and refused
+  (owner decision D-1, #7, recorded in `docs/tasks/v3-spec/design.md`); that list lives in the
+  verdicts area, in its own section on the bound of a protected verdict. Before attacking, rlsentry
+  reads what decides access for the operation (its policies, and the checks, triggers and rules that
+  refuse or drop a write) and stops the run naming any input those depend on that the published
+  list of request shapes does not cover. A column default that only fills a column, and
+  decides nothing, is not such a dependency;
+- for a read, which signal from the database itself counts as its account of the refused
   attempt. For a read, which row-level security answers with an empty result and no error, it says
   what shows that rows existed and that a policy, not an empty table, kept them out;
 - that when neither verdict can be shown, the run stops; this is not a third verdict;
 - what each exit code means: `0` nothing exposed, `1` something exposed, `2` the run could not
   build, attack or finish (one code for all three; the message says which);
-- the rules for insert, update and delete verdicts are decided here, under the area's Rules; their
-  full scenarios are written by `anon-write`'s brief.
+- that the rules for when an insert, an update or a delete is protected are decided by
+  `anon-write`'s brief, under the same bound, and that the cases T-01's reviews found (PR #6:
+  column-only grants on a write, an update refused by `WITH CHECK` that another value passes, an
+  unfiltered update refused by one row while a filtered one lands, an update a trigger or rule
+  silently drops unless a chosen value is sent) are scenarios that brief must include. The
+  verdicts area lists them under Not yet built, marked `anon-write`, one line each with a link to the
+  verdict that found it; `anon-write`'s brief writes them in full.
 
 ### S-5: The roadmap orders the work and passes the harness's check
 

@@ -11,10 +11,10 @@ Lessons from earlier work in this repository. Read before building.
   update refused by `WITH CHECK` that another value passes (same verdict); an unfiltered update
   refused because one row fails `WITH CHECK` while a filtered update of another row succeeds
   ([verdict 2](https://github.com/pitaya943/rlsentry-v3/pull/6#issuecomment-7211365081)).
-- How to avoid it: a protected verdict is a claim about every request the threat model lets the
-  visitor send, not about the requests rlsentry chose. For each protected rule, list the request
-  shapes the visitor can vary (columns named, values sent, filter or none, one row or many) and say
+- How to avoid it: a protected verdict is a claim about every request shape on the published list
+  (the bound, owner decision D-1 in #7), not only about the requests rlsentry happened to try. For
+  each protected rule, list the request shapes the visitor can vary (columns named, values sent, filter or none, one row or many) and say
   for each why rlsentry's attempts cover it or why the database's answer to one shape implies the
   answer to the others; where neither holds, rlsentry must try that shape too or stop.
-- Count: 2 (one task, two verdicts)
+- Count: 4 (one task, four verdicts; the fourth is https://github.com/pitaya943/rlsentry-v3/pull/6#issuecomment-7211823557)
 - Sources: https://github.com/pitaya943/rlsentry-v3/pull/6#issuecomment-7211268769, https://github.com/pitaya943/rlsentry-v3/pull/6#issuecomment-7211365081
