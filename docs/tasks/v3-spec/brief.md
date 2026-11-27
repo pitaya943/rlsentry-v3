@@ -36,6 +36,23 @@ These are the demands, in the owner's terms. The spec turns each into scenarios 
    live project the user owns, non-destructively and only when the user opts in and proves
    ownership; a check that runs on a pull request's migrations; and a survey of related work.
 
+### Words this brief uses
+
+- **anonymous visitor**: whoever holds only the project's URL and its public anon key.
+- **the copy**: the throwaway database (PostgreSQL with PostgREST, Supabase's REST layer) that one
+  run builds on this machine from a project's migrations, attacks, and destroys.
+- **backend**: where the copy runs: as local processes, or in Docker containers.
+- **seeding**: filling every table of the copy with fake rows before attacking it.
+- **operation**: one of read, insert, update, delete, attacked separately on every table.
+- **verdict**: the answer for one table and operation: exposed or protected.
+- **basis**: the one line saying why a verdict was given.
+- **evidence**: for an exposed verdict, the fake row read, created, changed or deleted.
+- **value search**: after a refused insert, trying further rows built from values the table's own
+  definitions name, to find one the insert policy accepts.
+- **`--target`**: the command-line option naming a live project; refused until `live-probe`.
+- **the lab**: the bundled flawed schemas. "Part of the lab" in `anon-read` means the tables whose
+  flaw shows on read.
+
 ## Out of scope
 
 - Any code, test or workflow. This task writes documents only (`docs/spec/`, `docs/roadmap.json`,
@@ -76,8 +93,9 @@ area's rules enforce.
 
 Given the six demands above,
 when someone checks the spec and the roadmap against them,
-then each of demands 1 to 5 is covered by at least one scenario in an area (under Scenarios or
-Not yet built), and each part of demand 6 is the goal of a task in `docs/roadmap.json`. A table in
+then every demand is covered either by a scenario in an area (under Not yet built, marked
+`anon-read`) or by the goal of a task in `docs/roadmap.json`, and demand 6 is split into its six
+named parts, each the goal of a task. A table in
 the task's folder (`docs/tasks/v3-spec/coverage.md`) maps each demand to those scenarios or tasks.
 
 ### S-4: The next task can start from the spec alone
@@ -88,22 +106,41 @@ then every scenario it is meant to build is already under Not yet built in an ar
 `anon-read`, written as Given / When / Then in the user's words with no class, table or file
 names of rlsentry's own code, and each one names how a person or a test would show it.
 
+### S-4a: The verdict model is decided once, with reasons
+
+Given the merged spec,
+when someone opens its verdicts area,
+then it says, each with v3's own reason:
+- what makes a read, an insert, an update and a delete exposed, and what makes each protected;
+- for each operation, which signal from the database itself counts as its account of the refused
+  attempt. For a read, which row-level security answers with an empty result and no error, it says
+  what shows that rows existed and that a policy, not an empty table, kept them out;
+- that when neither verdict can be shown, the run stops; this is not a third verdict;
+- what each exit code means, at least: nothing exposed, something exposed, could not build,
+  attack or finish the run.
+
 ### S-5: The roadmap orders the work and passes the harness's check
 
 Given the merged `docs/roadmap.json`,
 when `state.py` from the shilaycow harness reads it,
 then it reports no problem, names `anon-read` as the next task, and the order has every task after
-its dependencies, the verdict and report model before the HTML report, and the copy and its safety
-before anything that attacks a live project. Each task's goal says what a user can try once it is
-merged.
+its dependencies, the verdict model (this task) and the JSON report and its schema (`anon-read`)
+before the HTML report, and the copy and its safety before anything that attacks a live project.
+Each task's goal says what a user can try once it is merged. Before the roadmap is on `main`, a
+script in the task's folder checks the branch's `docs/roadmap.json` by the same rules `state.py`
+applies (every field present, no unknown dependency, no loop, a done task has a `pr`, an open task's
+dependencies are not done) and names the next task.
 
 ### S-6: The spec is v3's own
 
 Given v3's spec and v2's `docs/spec/`,
 when someone compares them,
-then no run of 12 or more consecutive words in a v3 spec file appears in a v2 spec file (a check
-script in the task's folder shows the comparison), and where v3 decides a rule the same way v2
-did, the rule gives v3's reason.
+then a check script in the task's folder finds no run of 12 or more consecutive words shared
+between any file of v3's `docs/spec/` and any `docs/spec/*.md` of `pitaya943/rlsentry-v2` at
+commit `21ae616` on `main`. Before comparing, the script lowercases the text, removes markdown
+syntax and punctuation, and does not count the words Given, When, Then and And that open a
+scenario line; it prints each shared run it finds, and its result is recorded in the task's folder.
+Every rule in v3's spec gives its own reason.
 
 ## How to try it
 
@@ -112,7 +149,8 @@ did, the rule gives v3's reason.
 3. From the repository root: `python3 ~/.claude/skills/shilaycow/state.py` and check that
    `problems` is empty and `next_task` is `anon-read` once the roadmap is on `main` (S-5); on the
    task branch, read the roadmap's order against S-5.
-4. Run the overlap check in `docs/tasks/v3-spec/` against a clone of `pitaya943/rlsentry-v2` and see
+4. Run the roadmap check script in `docs/tasks/v3-spec/` on the task branch (S-5).
+5. Run the overlap check in `docs/tasks/v3-spec/` against a clone of `pitaya943/rlsentry-v2` and see
    it report no shared run of 12 words (S-6).
 
 ## Critical areas
@@ -127,6 +165,13 @@ did, the rule gives v3's reason.
 - **Stack**: Python 3.10+ command-line tool; the copy is PostgreSQL 16 with PostgREST, versions
   pinned in the spec, on a local-process backend and a Docker backend. The spec names behaviour,
   not modules.
+- **Versions**: PostgreSQL 16 and PostgREST 12.2; the builder pins the latest patch release of
+  each in the spec and records it in the trail.
+- **Area files** follow the harness's spec layout (`sc-spec`): what the area is for, Scenarios,
+  Rules, Not yet built, the tasks that last changed it.
+- **Isolation from the host**: the spec states the rule (migration code cannot run a program or
+  touch a file on the machine running rlsentry) and names the mechanism it relies on on each
+  backend; `anon-read` and `docker-backend` prove it.
 - **Areas**, as users would name them: attacking a project, verdicts and evidence, reports (text,
   JSON, HTML), the throwaway copy, the lab, live targets, and the threat model. The builder may
   merge or split them if a scenario fits none, and says so in the trail.
