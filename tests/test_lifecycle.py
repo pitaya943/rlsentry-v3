@@ -1,9 +1,10 @@
-"""S-5: the copy is gone when a run ends (finished, stopped with 2, Ctrl-C while running), and a
-copy left by a killed run is removed by the next."""
+"""S-5: the copy is gone when a run ends (finished, stopped with 2, Ctrl-C or SIGTERM while it
+builds, seeds or attacks, which exit 2), and a copy left by a killed run is removed by the next."""
 
 import os
 import signal
 import socket
+import time
 from pathlib import Path
 
 import pytest
@@ -82,30 +83,75 @@ def test_a_finished_run_and_a_stopped_run_leave_nothing(tmp_path):
 
 SLOW = {"001.sql": "create table t (id int);", "002_slow.sql": "select pg_sleep(60);"}
 
+# A run held in each part of its life: a migration that sleeps (build), a trigger that sleeps on the
+# fake rows (seeding), a policy that sleeps on the visitor's read (attack, under the 30 s timeout).
+HELD = {
+    "build": (SLOW, "postgres postgres"),
+    "seeding": ({"001.sql": (
+        "create table t (id int);\n"
+        "create function slow() returns trigger language plpgsql as "
+        "$$ begin perform pg_sleep(60); return new; end $$;\n"
+        "create trigger slow before insert on t for each row execute function slow();"
+    )}, "INSERT"),
+    "attack": ({"001.sql": (
+        "create table t (id int);\n"
+        "alter table t enable row level security;\n"
+        "create policy slow on t for select using ((select pg_sleep(25)) is not null);"
+    )}, "authenticator"),
+}
 
-def test_ctrl_c_while_running_destroys_the_copy(tmp_path):
+
+def wait_for_part(record: Path, title: str, timeout: float = 60) -> None:
+    """Until a backend of the run has shown `title` in its process title for a second: the run is
+    held in that part (a passing query, such as PostgREST's schema load, does not count)."""
+    root = runs_root() / record.stem
+    deadline = time.monotonic() + timeout
+    since: dict[str, float] = {}
+    while time.monotonic() < deadline:
+        now, showing = time.monotonic(), set()
+        for proc in Path("/proc").iterdir():
+            if not proc.name.isdigit():
+                continue
+            try:
+                if not os.readlink(proc / "cwd").startswith(str(root)):
+                    continue
+                line = (proc / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+            except OSError:
+                continue
+            if line.startswith("postgres: ") and title in line and "idle" not in line:
+                showing.add(proc.name)
+        since = {pid: since.get(pid, now) for pid in showing}
+        if any(now - t >= 1 for t in since.values()):
+            return
+        time.sleep(0.05)
+    raise AssertionError(f"the run never showed {title!r}")
+
+
+def interrupted(tmp_path, part: str, send) -> None:
+    files, title = HELD[part]
     before = records()
-    run = start_rlsentry(write(tmp_path / "p", SLOW))
+    run = start_rlsentry(write(tmp_path / "p", files))
     record, info = wait_for_server(before)
     server = info["postgres"]["pid"]
-    assert pid_alive(server)
-    os.killpg(run.pid, signal.SIGINT)  # what Ctrl-C sends to the terminal's foreground job
+    wait_for_part(record, title)
+    send(run)
     out, err = run.communicate(timeout=60)
-    assert run.returncode == 130, err
-    assert "interrupted" in err
+    assert run.returncode == 2, err  # docs/spec/verdicts.md, exit codes: could not finish (interrupted)
+    assert "interrupted: the copy was destroyed" in err
     assert not pid_alive(server)
     assert not (runs_root() / record.stem).exists() and not record.exists()
     assert_no_copy_left()
 
 
-def test_sigterm_while_running_destroys_the_copy(tmp_path):
-    before = records()
-    run = start_rlsentry(write(tmp_path / "p", SLOW))
-    record, info = wait_for_server(before)
-    run.terminate()
-    run.communicate(timeout=60)
-    assert not pid_alive(info["postgres"]["pid"])
-    assert_no_copy_left()
+@pytest.mark.parametrize("part", HELD)
+def test_ctrl_c_while_running_destroys_the_copy(tmp_path, part):
+    # what Ctrl-C sends to the terminal's foreground job
+    interrupted(tmp_path, part, lambda run: os.killpg(run.pid, signal.SIGINT))
+
+
+@pytest.mark.parametrize("part", HELD)
+def test_sigterm_while_running_destroys_the_copy(tmp_path, part):
+    interrupted(tmp_path, part, lambda run: run.terminate())
 
 
 def test_a_copy_left_by_a_killed_run_is_removed_by_the_next(tmp_path):
