@@ -25,6 +25,16 @@ is built.
   exit `2`, listing each table without a verdict, the answer it got, and that protected verdicts
   come with `anon-read-protected`. A run where every table is exposed exits `1`; one with no table
   in an exposed schema exits `0`.
+- Some stops end the run at once, because they mean the copy itself cannot be trusted: an answer
+  holding rows the copy does not hold, a redirect, a migration that fails, a PostgreSQL or
+  PostgREST outside the accepted series, and a setting a migration puts on the REST layer or the
+  roles it passes through. Others only leave that one table without a verdict while the remaining
+  tables are still attacked: an answer not shown exposed, a request that times out, a schema whose
+  use is not granted to `anon` (S-4), and a table on which `anon` may read no column (reported with
+  the reason "no column it may read", and no read sent).
+- For a table without a verdict, the summary and the JSON report give the HTTP status, the
+  PostgreSQL error code when there is one, and the reason; the builder names the JSON fields within
+  the spec's report schema and records them in the trail.
 
 ### Words this brief uses
 
@@ -119,14 +129,17 @@ when the user runs rlsentry,
 then nothing is built, the message names the program, the version found and the series needed, and
 the command exits `2`; within the series, the run goes ahead and both reports name the exact
 versions the copy ran. The versions are read from each program's `--version` and confirmed from
-the running server. A test shows the stop by putting first on the path a program that only reports
+the running server; where the two differ, the server's version decides, and one outside the series
+stops the run. A test shows the stop by putting first on the path a program that only reports
 another version; this is the one stand-in S-10 allows.
 
 ### S-8: The lab, for reads that are exposed (lab: changes the spec's scenarios)
 
 Given rlsentry installed,
 when the user lists the lab, and runs each lab schema by name,
-then the list names each schema with its flaw in one line, and each schema's verdicts, exit code
+then the list names each schema with its flaw in one line (this task ships the schemas whose
+flaw shows as an exposed read, and those that show a stop this task builds; schemas whose statement
+expects a protected read come with `anon-read-protected`), and each schema's verdicts, exit code
 and any stop are exactly those its statement gives; between them the schemas show a read exposed
 for each reason the verdicts area gives (row-level security off, a policy admitting everyone, a
 policy admitting some rows, a grant on some columns, a request without a key).
@@ -198,8 +211,8 @@ that describes what the check prints without stating its current output.
   with no columns gets a stop naming it; a partitioned table is attacked through its parent only,
   and its partitions are listed as reached through it; migration files are ordered by name, and two
   names that differ only in case stop the run; a folder with `supabase/migrations/` uses only that
-  subfolder and says so; a table on which `anon` may read no column gets no read attempt and is
-  passed to `anon-read-protected`'s stop; any setting a migration puts on the roles `anon`,
+  subfolder and says so; a table on which `anon` may read no column is reported without a
+  verdict, as "How a run goes" says; any setting a migration puts on the roles `anon`,
   `authenticated` or `authenticator`, and any `pgrst.*` setting anywhere, stops the run naming the
   role and setting, since those roles are the only ones PostgREST and the visitor pass through;
   other settings on the role `postgres` (such as `search_path`) do not stop it; no limit on table count or row size, but each request has a
