@@ -1,0 +1,7 @@
+time	who	decision	why	evidence
+2026-11-27T08:03Z	owner	split anon-read into anon-read-copy (this task: copy, exposed reads, reports) and anon-read-protected	40 scenarios are more than one reviewable pull request	conversation 2026-11-27, answer 1.a
+2026-11-27T08:03Z	owner	PostgREST is installed by the cloud environment setup script, added by the owner	the session cannot download or run the binary itself; no Docker daemon here	conversation 2026-11-27, answer 2.a
+2026-11-27T08:03Z	owner	version rule becomes a series: PostgreSQL 16 from 16.15, PostgREST 12.2 from 12.2.12; reports name exact versions	the environment has PostgreSQL 16.15; exact pin 16.16 would stop every run	conversation 2026-11-27, answer 3.a
+2026-11-27T08:03Z	orchestrator	folded the v3-spec Retro into .shilaycow/pitfalls.md; counts taken from the Retro	references/learning.md, Folding it in	https://github.com/pitaya943/rlsentry-v3/issues/5#issuecomment-7212581941
+2026-11-27T08:03Z	orchestrator	corrections proposed: S-10 (real database, count 2) and S-11 (one definition, count 2) here; the protected-rule guard (count 5) in anon-read-protected, where protected is built	learning.md, Correcting a class	docs/tasks/anon-read-copy/brief.md
+2026-11-27T08:03Z	orchestrator	later issues proposed for this task: #20, #22, #23; for anon-read-protected: #14, #21	they touch these areas	docs/tasks/anon-read-copy/brief.md
