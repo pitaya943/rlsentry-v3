@@ -51,8 +51,12 @@ task that builds it. The order of those tasks is in [the roadmap](../roadmap.jso
   before any policy.
 - **verdict**: the answer for one table and one operation. There are exactly two:
   - **exposed**: the attempt really did what the visitor wanted, as the direct view confirms;
-  - **protected**: the attempt was refused or kept from every row, as the database's own record of
-    that attempt confirms.
+  - **protected**: every request shape the verdicts area lists was tried and each was refused or
+    kept from every row, as the database's own record of those attempts confirms. It promises no
+    more than that list (see below).
+- **request shape**: one way the visitor can vary a request for an operation (the columns named,
+  the values sent, a filter or none, which rows). The verdicts area lists the shapes a protected
+  verdict covers.
 - **basis**: the one line that says why a verdict was given.
 - **evidence**: for an exposed verdict, the fake row that was read, created, changed (before and
   after) or deleted, as the direct view holds it.
@@ -78,8 +82,11 @@ task that builds it. The order of those tasks is in [the roadmap](../roadmap.jso
 - It does not give a third answer. No "probably", no "unknown" in a report: when it cannot show
   either verdict, the run stops.
 - It does not fix anything: it suggests no policy and edits no migration.
-- It does not promise more than it tried. Protected means the attempts it made, against the rows
-  the copy held, were refused; it is not a proof that no request could ever succeed.
+- It does not promise more than its published list. Protected means every request shape the
+  [verdicts area](verdicts.md#the-bound-of-a-protected-verdict) lists was tried against the rows the
+  copy held and refused. When a table's code reads something the visitor could change outside that
+  list (a request header, a cookie, the time of the request), rlsentry gives that table and
+  operation no verdict: the run stops and names what was read.
 - It sends nothing anywhere but the copy it built: no telemetry, no lookup, no upload.
 - It does not test the rest of Supabase (sign-in, Edge Functions, Realtime, GraphQL, the dashboard),
   nor look for flaws that are not about who may read or change what (injection, denial of

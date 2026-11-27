@@ -32,6 +32,12 @@ Every rule here was decided by `v3-spec`.
   send: any method, any table name, any filter, ordering, range or column list, any `Prefer` header,
   any body, and as many requests as they like, in any order. Why: the REST layer is public and
   documented, and nothing in Supabase limits a visitor to the requests the project's own app makes.
+- rlsentry does not try every such request. A protected verdict covers the request shapes the
+  [verdicts area](verdicts.md#the-bound-of-a-protected-verdict) lists, and when a table's code
+  depends on anything else the visitor can change (a header, a cookie, the moment a request is
+  sent), the run stops instead of giving a verdict. Why: the requests a visitor can send have no end,
+  so a promise about all of them could not be kept; one bounded by a published list can, and
+  stopping outside it keeps rule 6 below.
 - From `more-surfaces` on, also calls to database functions exposed over the API, and requests to
   storage buckets. Why: they answer to the same key, and a policy gap there leaks just as much.
 - The attacker cannot change the project's schema, policies, grants or REST settings. Why: those come

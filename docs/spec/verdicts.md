@@ -24,9 +24,11 @@ by `anon-write`'s brief; the rules they follow are these.
   missing or contradicted. Why: guessing "protected" breaks the one promise the tool makes, guessing
   "exposed" teaches the user to ignore it, and carrying on would produce a report that looks
   complete when it is not.
-- Every verdict rests on the attempt rlsentry actually sent, never on reading the policies' SQL. Why:
-  policies call functions, read other tables and depend on defaults; only running them says what
-  they do.
+- Every verdict rests on the attempts rlsentry actually sent, never on reading the policies' SQL.
+  Reading what a table's code depends on ([The bound of a protected verdict](#the-bound-of-a-protected-verdict))
+  can stop a run, never give a verdict. Why: policies call functions, read other tables and depend
+  on defaults; only running them says what they let through. What they read is plain in the catalog,
+  and a mistake in reading it costs a stop, never a false answer.
 - Nothing else writes to the copy while an attempt is judged, and each attempt is judged against the
   table as the direct view saw it just before. Why: a change from anywhere else could pass for the
   attempt's effect, or hide it.
@@ -172,13 +174,15 @@ The two follow the same rules; only the change looked for differs.
 - A refusal of any other kind, on the first attempt or on a row tried alone, is never protected; as
   for insert, what follows is for `anon-write`'s brief, and if no verdict can be shown the run stops.
 
-### Request shapes
+### The bound of a protected verdict
 
-A protected verdict is a claim about every request the
-[threat model](threat-model.md#what-the-attacker-can-send) lets the visitor send for that operation,
-not about the requests rlsentry chose. For each way the visitor can vary a request, this table says
-why rlsentry's attempts answer for it. A rule added later to this area adds its row here. Why: a rule
-that is true only of the attempts it lists says protected on tables a different request opens.
+Protected is a bounded promise: every request shape in the table below was tried, against the rows
+the copy held, and each was refused or kept from every row. Inside that bound a false protected must
+not happen; where a table's code could let through a request outside it, rlsentry gives no verdict.
+A rule added later to this area adds its row to the table. Why: the requests a visitor can send are
+open-ended (any header, any value, at any time), so no finite set of attempts covers them all; a
+promise with a published edge can be kept, and the reader can see where it ends. The owner chose
+this meaning (`v3-spec`, decision D-1).
 
 | Operation | The visitor varies | Why the attempts answer for it |
 |---|---|---|
@@ -189,6 +193,42 @@ that is true only of the attempts it lists says protected on tables a different 
 | update, delete | filter or none | The first attempt has none: a filter only narrows the rows reached and adds the read policies to them. |
 | update, delete | which rows | A statement refused as a whole is followed by a try of each row on its own, as above. |
 | update | an insert that turns into an update on a duplicate key | PostgreSQL requires the existing row to be readable and passes the change through the update policies, so it reaches only rows a filtered update reaches, and the tries of each row answer for it. |
+| all | anything else: request headers (`Prefer` included), cookies, method, path, the time it is sent | Not varied. The check below finds whether the table's code reads any of it; when it does, there is no verdict. |
+| all | requests to other tables first, then this one | Not in the bound: each operation is judged alone, against the rows the copy held. |
+
+- **Before attacking an operation on a table, rlsentry reads what the table's code depends on**,
+  through the direct view: the policies that apply to `anon` on that table for that operation and
+  for read, the table's triggers and rules for that operation, its column defaults, generated
+  columns and checks, and every function, view and table these reach, followed to the end. The
+  operation gets a verdict only when all of it depends on nothing but:
+  - the row's own columns and the values the attempt sends (the value search varies them); not its
+    system columns such as `xmin` or `ctid`, which every write changes;
+  - the role: `current_user`, `current_role` and `session_user`, the same for every request;
+  - the anon key's claims, read with `current_setting` named by a literal `request.jwt.claims` or
+    `request.jwt.claim.<name>`: the key is signed, the visitor cannot change it without a secret
+    the [threat model](threat-model.md#what-the-attacker-holds) says they never hold, and the
+    attempts carry exactly that key;
+  - the rows of other tables as the copy holds them;
+  - constants, and PostgreSQL's own functions and operators that PostgreSQL marks immutable, whose
+    result depends on their arguments alone.
+
+  Anything else makes the run stop before that operation is attacked, with exit `2`; the message
+  names the table, the operation, the policy, trigger or function, and what it reads. That covers
+  any other request setting (`request.headers`, `request.cookies`, `request.method`,
+  `request.path`), any other setting, the clock, randomness, a sequence, the client's address and
+  PostgreSQL's other functions not marked immutable, and any function whose body rlsentry cannot
+  follow: one written in a language other than SQL or PL/pgSQL, or one that builds SQL text and runs
+  it. Why: the visitor can change each of these from one request to the next (a header in each
+  request, the moment it is sent), and rlsentry varies none of them, so code that reads one may let
+  through a request it never sent. A trigger counts as much as a policy: an update policy that admits
+  every row, behind a trigger that drops the change unless a header is sent, reaches no row for
+  rlsentry's attempt and every row for the visitor who sends the header. How a function made by the
+  migrations is marked is not trusted, since a migration can mark one immutable while it reads a
+  header, so rlsentry follows its body; PostgreSQL's own functions carry the marks PostgreSQL gave
+  them, which a migration, not being a superuser, cannot change.
+- The basis of every protected verdict says that it covers the request shapes of this table, one
+  operation at a time, against the rows the copy held. Why: the reader must see where the promise
+  ends, in the report itself, not only here.
 
 ### Exit codes
 
@@ -196,7 +236,7 @@ that is true only of the attempts it lists says protected on tables a different 
 |---|---|
 | `0` | The run finished and no operation on any table was exposed. |
 | `1` | The run finished and at least one operation was exposed. |
-| `2` | The run could not build the copy, could not attack it (a verdict could not be shown, or the command was refused, `--target` included), or could not finish (interrupted, or the copy failed). The message says which. |
+| `2` | The run could not build the copy, could not attack it (a verdict could not be shown, a table's code reads something outside [the bound](#the-bound-of-a-protected-verdict), or the command was refused, `--target` included), or could not finish (interrupted, or the copy failed). The message says which. |
 
 - `2` wins over `1`: a run that found something exposed and then stopped exits `2`, and its message
   still names what was exposed. Why: `1` tells a script the whole project was checked; a run that
@@ -297,6 +337,16 @@ then no request goes to that address, the run stops, its message says the read w
 redirect, and the command exits `2`.
 Shown by: a test that points the redirect at an address it watches, and checks that nothing arrives
 there, the message, and the exit code.
+
+### A read policy that depends on a request header stops the run (`anon-read`)
+
+Given a table whose read policy admits a row only when the request carries a certain header value,
+when the user runs rlsentry,
+then the read is neither exposed nor protected; the run stops before attacking it, its message names
+the table, the policy and the header setting it reads, and the command exits `2`.
+Shown by: a test on a lab schema with such a policy checks that no verdict is reported, the message,
+and the exit code; and a person sends the same read with that header to the copy and sees a row come
+back, which is why protected would have been wrong.
 
 ### A run that finds something and then stops exits 2 (`anon-read`)
 
