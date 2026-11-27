@@ -5,3 +5,4 @@ time	who	decision	why	evidence
 2026-11-27T08:03Z	orchestrator	folded the v3-spec Retro into .shilaycow/pitfalls.md; counts taken from the Retro	references/learning.md, Folding it in	https://github.com/pitaya943/rlsentry-v3/issues/5#issuecomment-7212581941
 2026-11-27T08:03Z	orchestrator	corrections proposed: S-10 (real database, count 2) and S-11 (one definition, count 2) here; the protected-rule guard (count 5) in anon-read-protected, where protected is built	learning.md, Correcting a class	docs/tasks/anon-read-copy/brief.md
 2026-11-27T08:03Z	orchestrator	later issues proposed for this task: #20, #22, #23; for anon-read-protected: #14, #21	they touch these areas	docs/tasks/anon-read-copy/brief.md
+2026-11-27T08:05Z	orchestrator	reader read brief at 5d64a49; owner agreed six fixes (run order and stop, non-exposed answers, key vs keyless, version stand-in, role settings that stop, terms)	fresh read found gaps a builder would guess at	docs/tasks/anon-read-copy/brief.md

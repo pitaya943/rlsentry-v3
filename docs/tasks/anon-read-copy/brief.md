@@ -14,6 +14,30 @@ exposed is not yet called protected: the run stops on it with exit `2` and says 
 verdicts come with `anon-read-protected`. That keeps the two-verdict model honest while half of it
 is built.
 
+### How a run goes in this task
+
+- Tables are attacked in the order of their schema-qualified name. Every table is read, both with
+  the anon key and with no key, before the run ends.
+- A read is **exposed** when either request gets rows back that the copy really holds; the basis
+  says which request got them (with the key, without a key, or both).
+- Any other answer (an empty `200`, a `401` or `403`, a permission error, anything else) gives that
+  table no verdict. After every table is tried, the run reports the exposed ones, then stops with
+  exit `2`, listing each table without a verdict, the answer it got, and that protected verdicts
+  come with `anon-read-protected`. A run where every table is exposed exits `1`; one with no table
+  in an exposed schema exits `0`.
+
+### Words this brief uses
+
+- **a stop**: the run ends with exit `2` without a verdict for some table, saying why (the
+  verdicts area of `docs/spec/` lists the reasons).
+- **D-1**: the owner's decision in `docs/tasks/v3-spec/design.md` that *protected* covers only the
+  request shapes the verdicts area lists.
+- **a lab schema's statement**: the expected verdicts, exit code and stops written in the lab
+  schema's own file, which its test compares the run against.
+- **Supabase's users table**: `auth.users`, of which the copy needs the columns migrations refer to.
+- **meet** (two runs): share a copy, a port, a directory or a process.
+- **a pitfall's count**: how many times `.shilaycow/pitfalls.md` records the mistake.
+
 ## Out of scope
 
 - The protected verdict for a read, the check before attacking that bounds it (design D-1 of
@@ -94,7 +118,9 @@ Given a machine whose PostgreSQL is not 16 at 16.15 or later, or whose PostgREST
 when the user runs rlsentry,
 then nothing is built, the message names the program, the version found and the series needed, and
 the command exits `2`; within the series, the run goes ahead and both reports name the exact
-versions the copy ran.
+versions the copy ran. The versions are read from each program's `--version` and confirmed from
+the running server. A test shows the stop by putting first on the path a program that only reports
+another version; this is the one stand-in S-10 allows.
 
 ### S-8: The lab, for reads that are exposed (lab: changes the spec's scenarios)
 
@@ -123,18 +149,19 @@ read as on Supabase* (throwaway copy). No scenario is marked `anon-read` any mor
 
 Given the test suite,
 when it runs on a machine with PostgreSQL and PostgREST of the accepted series,
-then every scenario above is shown by a test that builds a real copy and sends real requests, with
-no stand-in for PostgreSQL or PostgREST; on a machine without them, the suite fails naming what is
+then every scenario of S-1 to S-8 is shown by a test that builds a real copy and sends real
+requests, with no stand-in for PostgreSQL or PostgREST except S-7's version stand-in; on a machine without them, the suite fails naming what is
 missing instead of skipping. `test_command` in `.shilaycow/config.yml` runs it.
 
 ### S-11: A term is defined in one place (new; corrects the pitfall "a fact stated in two places", count 2)
 
 Given the repository,
 when the test suite runs,
-then a check fails if a term defined under Terms in `docs/spec/index.md` is defined again in another
-file of `docs/spec/`, naming the term and the file, and passes on the spec as merged; the stale
-sentence in `docs/tasks/v3-spec/checks.md` (#20) is corrected to describe the check without its
-current output.
+then a check fails if a term defined under Terms in `docs/spec/index.md` (a line `- **term**: ...`)
+is defined the same way in another file of `docs/spec/`, naming the term and the file, and passes
+on the spec as merged; and the sentence in `docs/tasks/v3-spec/checks.md` "On the task branch it
+prints `first open task: v3-spec` and `anon-read depends on: v3-spec`" (#20) is replaced by one
+that describes what the check prints without stating its current output.
 
 ## How to try it
 
@@ -158,9 +185,8 @@ current output.
 
 ## Assumptions
 
-- **Installing PostgREST**: the owner adds to the cloud environment's setup script lines that
-  download PostgREST 12.2.12 from its GitHub release and put it on the path (the agreeing
-  conversation gives them). Until a session starts with it installed, no scenario can be shown, and
+- **Installing PostgREST**: the cloud environment's setup script downloads PostgREST 12.2.12 from
+  its GitHub release and puts it on the path; the owner adds those lines. Until a session starts with it installed, no scenario can be shown, and
   the run opens a `needs-owner` issue rather than build blind.
 - **Versions**: PostgreSQL 16 from 16.15 and PostgREST 12.2 from 12.2.12, as S-7 says; this replaces
   the spec's exact pins of 16.16 and 12.2.12, which this environment cannot meet (PostgreSQL 16.15
@@ -173,9 +199,10 @@ current output.
   and its partitions are listed as reached through it; migration files are ordered by name, and two
   names that differ only in case stop the run; a folder with `supabase/migrations/` uses only that
   subfolder and says so; a table on which `anon` may read no column gets no read attempt and is
-  passed to `anon-read-protected`'s stop; settings a migration puts on the role `postgres` stop the
-  run only when they are PostgREST settings (`pgrst.*`) or change what decides access, and the
-  builder records which in the trail; no limit on table count or row size, but each request has a
+  passed to `anon-read-protected`'s stop; any setting a migration puts on the roles `anon`,
+  `authenticated` or `authenticator`, and any `pgrst.*` setting anywhere, stops the run naming the
+  role and setting, since those roles are the only ones PostgREST and the visitor pass through;
+  other settings on the role `postgres` (such as `search_path`) do not stop it; no limit on table count or row size, but each request has a
   30-second timeout, a timeout stops the run naming the table.
 - **Requests without a key**: rlsentry sends every read both with the anon key and without a key,
   as the spec says; that hosted Supabase lets a keyless request through is from its documentation,
