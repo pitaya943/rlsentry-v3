@@ -1,6 +1,0 @@
-# shilaycow settings, read by every skill. Change through a pull request.
-owner: pitaya943        # the only account that approves and merges into main
-bot: bullet-bots        # the account agent sessions act as (Write role, not Admin)
-mode: auto              # /shilaycow agrees a brief; /shilaycow run runs it unattended
-test_command: ""        # empty: no test suite yet; the first task that adds one sets it
-fix_rounds: 2           # verifier FAIL -> fix -> re-verify rounds before asking the owner
