@@ -1,0 +1,10 @@
+{
+  "flaw": "a read policy written as using (true), so every profile, phone number included, is public",
+  "explanation": "The policy turns row-level security on and then lets every request through: an anonymous visitor reads every user's profile, with each row pointing at a user in auth.users.",
+  "reads": [
+    {"table": "public.profiles", "verdict": "exposed", "because": "a policy admitting everyone",
+     "requests": ["anon key", "no key"], "rows": "all", "columns": null}
+  ],
+  "exit_code": 1,
+  "stop": null
+}

@@ -1,0 +1,144 @@
+"""The `rlsentry` command: the order of a run, and its exit code."""
+
+from __future__ import annotations
+
+import argparse
+import signal
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+from . import attack, direct, inputs, verdicts, versions
+from .copy import Copy
+from .report import Outcome, Result, Stopped, stop_message, summary, write_json
+from .stops import Stop, printable
+
+EXIT_STOPPED = 2  # also an interrupted run: it could not finish (docs/spec/verdicts.md, exit codes)
+
+
+class Terminated(BaseException):
+    """SIGTERM, raised where the run is so the copy is destroyed on the way out."""
+
+
+def _on_sigterm(signum, frame):
+    raise Terminated()
+
+
+def _parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="rlsentry",
+        description="Build a throwaway copy of a Supabase project from its migrations and attack it "
+        "as the anonymous visitor.",
+    )
+    p.add_argument("project", nargs="?", help="a Supabase project's folder, or a folder of .sql files")
+    p.add_argument("--json", metavar="FILE", type=Path, help="also write the JSON report to FILE")
+    p.add_argument("--target", metavar="URL", help="a live project: refused, not available yet")
+    p.epilog = "rlsentry lab lists the bundled lab schemas; rlsentry lab NAME [--json FILE] runs one."
+    return p
+
+
+def _lab_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog="rlsentry lab", description="List the lab schemas, or run one by name.")
+    p.add_argument("name", nargs="?", help="the lab schema to run; leave out to list them")
+    p.add_argument("--json", metavar="FILE", type=Path, help="also write the JSON report to FILE")
+    return p
+
+
+def say(message: str) -> None:
+    print(f"rlsentry: {printable(message)}", file=sys.stderr, flush=True)
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["lab"]:
+        return _lab(_lab_parser().parse_args(argv[1:]))
+    args = _parser().parse_args(argv)
+    if args.target is not None:
+        # Refused before anything else: the URL is never parsed, looked up or connected to.
+        say("live targets are not available yet: --target is refused, and nothing was built or sent")
+        return EXIT_STOPPED
+    if args.project is None:
+        _parser().print_usage(sys.stderr)
+        say("name a project's folder")
+        return EXIT_STOPPED
+    return _guarded(lambda: inputs.resolve(args.project), args.json)
+
+
+def _lab(args) -> int:
+    if args.name is None:
+        schemas = inputs.lab()
+        width = max(map(len, schemas), default=0)
+        for name, flaw in schemas.items():
+            print(f"{name.ljust(width)}  {flaw}")
+        return 0
+    return _guarded(lambda: inputs.resolve_lab(args.name), args.json)
+
+
+def _guarded(project, json_path: Path | None) -> int:
+    """A run, with every way it can end turned into its exit code."""
+    signal.signal(signal.SIGTERM, _on_sigterm)
+    try:
+        return _run(project(), json_path)
+    except Stop as stop:
+        say(f"stopped: {stop.reason}")
+        return EXIT_STOPPED
+    except (KeyboardInterrupt, Terminated):
+        say("interrupted: the copy was destroyed")
+        return EXIT_STOPPED
+    except Exception as e:  # never exit 1 (exposed) or 0 on a failure of rlsentry's own
+        say(f"failed: {type(e).__name__}: {e}; the copy was destroyed")
+        return EXIT_STOPPED
+
+
+def _run(project: inputs.Project, json_path: Path | None) -> int:
+    ran_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    for note in project.notes:
+        say(note)
+    programs, found = versions.check()
+    with Copy(project, programs, found, say=say) as copy:
+        result = Result(ran_at=ran_at, migrations=len(project.migrations), exposed_schemas=project.exposed_schemas,
+                        postgres=copy.versions.postgres, postgrest=copy.versions.postgrest)
+        try:
+            _attack(copy, project, result)
+            result.finished = True
+        except Stop as stop:
+            result.stop = Stopped(stop.reason, stop.table)
+        print(summary(result), flush=True)
+        if json_path is not None:
+            write_json(result, json_path)
+        message = stop_message(result)
+        if message:
+            say(message)
+    return result.exit_code
+
+
+def _attack(copy: Copy, project, result: Result) -> None:
+    """Every table of an exposed schema, in schema-qualified name order, read with the anon key and
+    with no key; a stop that means the copy cannot be trusted ends it at once."""
+    key = attack.anon_key(copy.jwt_secret)
+    with copy.connect() as admin:
+        result.not_reachable = direct.not_reachable(admin, project.exposed_schemas)
+        result.partitions = direct.partitions(admin, project.exposed_schemas)
+        for table in direct.tables(admin, project.exposed_schemas):
+            outcome = Outcome(table.schema, table.name)
+            if not table.columns:
+                outcome.reason = "the table has no columns; no request sent"
+            elif not table.schema_usage:
+                outcome.reason = (f"anon is not granted usage on schema {table.schema}, which Supabase "
+                                  "grants only on public; no request sent")
+            elif not table.readable:
+                outcome.reason = "no column it may read; no request sent"
+            else:
+                partial = None if table.readable == table.columns else table.readable
+                judged = []
+                for token in (key, None):
+                    rows = direct.rows(admin, table, table.readable)  # the table just before this request
+                    answer = attack.read(copy.rest_port, table.schema, table.name, table.readable, token)
+                    attempt, got = verdicts.judge_answer(f"{table.schema}.{table.name}", answer, rows)
+                    judged.append((attempt, got, rows))
+                outcome = verdicts.judge(table.schema, table.name, judged, partial)
+            result.outcomes.append(outcome)
+
+
+def main_exit() -> None:
+    sys.exit(main())

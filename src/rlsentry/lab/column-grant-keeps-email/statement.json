@@ -1,0 +1,10 @@
+{
+  "flaw": "columns granted back one by one after a revoke, the members' email among them",
+  "explanation": "Revoking the table and granting some columns back hides only the columns left out: an anonymous visitor still reads every member's id, name and email.",
+  "reads": [
+    {"table": "public.members", "verdict": "exposed", "because": "a grant on some columns",
+     "requests": ["anon key", "no key"], "rows": "all", "columns": ["id", "display_name", "email"]}
+  ],
+  "exit_code": 1,
+  "stop": null
+}

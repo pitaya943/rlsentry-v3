@@ -6,13 +6,80 @@ shown.
 
 ## Scenarios
 
-None hold yet: nothing is built. The read scenarios `anon-read` builds are under
-[Not yet built](#not-yet-built).
+"Shown by" names the test that shows a scenario hold; every test builds a real copy and sends real
+requests.
+
+### Read a table that has row-level security off
+
+Given a project with a table that has row-level security off,
+when the user runs rlsentry on its migrations,
+then the table's read is exposed, the basis says the visitor read every one of its rows, one fake
+row is shown as evidence, and the command exits `1`.
+Shown by: `tests/test_verdicts.py::test_a_table_with_row_level_security_off_is_exposed`, which
+checks the count, that the evidence row holds the fake values the copy was seeded with, and the
+exit code; the lab's `rls-left-off` shows the same.
+
+### Read a table whose policy lets everyone read
+
+Given a table with row-level security on and a read policy for `anon` that admits every row,
+when the user runs rlsentry,
+then its read is exposed, with a fake row as evidence, and the command exits `1`.
+Shown by: `tests/test_verdicts.py::test_a_policy_that_lets_everyone_read_is_exposed`.
+
+### Read a table whose policy lets some rows through
+
+Given a table whose read policy admits only rows with a certain value, and seeded rows both with and
+without it,
+when the user runs rlsentry,
+then its read is exposed, the basis says how many of the table's rows the visitor got, and the
+evidence is one of the admitted rows.
+Shown by: `tests/test_verdicts.py::test_a_policy_that_lets_some_rows_through_is_exposed_with_their_count`,
+which checks the count against the rows seeded and that the evidence holds the admitted value.
+
+### Read a table whose read grant covers only some columns
+
+Given a table with row-level security off on which `anon` holds no table read grant but holds the
+read privilege on some of its columns,
+when the user runs rlsentry,
+then its read is exposed, the basis names the columns the visitor read, the evidence holds only
+those columns, and the command exits `1`.
+Shown by: `tests/test_verdicts.py::test_a_read_grant_on_some_columns_is_exposed_on_those_columns_only`.
+
+### An answer holding rows the table does not hold stops the run
+
+Given a table whose read answer is shaped by code in the migrations to hold rows the table does not
+hold,
+when the user runs rlsentry,
+then the read is neither exposed nor protected; the run stops, naming the table, and the command
+exits `2`.
+Shown by: `tests/test_verdicts.py::test_an_answer_holding_rows_the_table_does_not_hold_stops_the_run_at_once`,
+whose answer is shaped by a cast the migrations define.
+
+### A redirect is never followed
+
+Given a table whose read policy makes the REST layer answer with a redirect to another address,
+when the user runs rlsentry,
+then no request goes to that address, the run stops, its message says the read was answered with a
+redirect, and the command exits `2`.
+Shown by: `tests/test_verdicts.py::test_a_redirect_is_never_followed_and_stops_the_run`, which points
+the redirect at an address it watches and sees nothing arrive there.
+
+### A run that finds something and then stops exits 2
+
+Given a project with one table whose read is exposed and, attacked after it, another whose read
+cannot be shown either way,
+when the user runs rlsentry,
+then the message names the exposed table and the table that stopped the run, and the command exits
+`2`, not `1`.
+Shown by: `tests/test_verdicts.py::test_reads_not_shown_exposed_get_no_verdict_and_the_run_stops_after_every_table`
+and `tests/test_reports.py::test_a_stopped_run_still_reports_what_it_found_in_both_forms`.
 
 ## Rules
 
-Every rule here was decided by `v3-spec`. They decide exposed for every operation and protected for
-a read; when a write is protected is `anon-write`'s to decide (see
+Every rule here was decided by `v3-spec`, except those that name `anon-read-copy`, which decided
+them. A rule marked "from `anon-read-protected`" is agreed and not built yet: until that task, a
+read is exposed or gets no verdict, never protected. The rules decide exposed for every operation
+and protected for a read; when a write is protected is `anon-write`'s to decide (see
 [Insert, update and delete](#insert-update-and-delete)).
 
 ### Two verdicts, and nothing between them
@@ -20,9 +87,10 @@ a read; when a write is protected is `anon-write`'s to decide (see
 - Each table gets one verdict per operation: exposed or protected. Each comes with a basis, and an
   exposed one with evidence. Why: a person reading a report, and a script reading its exit code, both
   need an answer they can act on; a third answer like "unclear" would let a real hole hide behind it.
-- When the run cannot show either verdict for a table and operation, the run stops: it attacks
-  nothing further, exits `2`, and its message names the table, the operation and which signal was
-  missing or contradicted. Why: guessing "protected" breaks the one promise the tool makes, guessing
+- When the run cannot show either verdict for a table and operation, that table and operation get
+  no verdict and the run ends with exit `2`, its message naming the table, the operation and which
+  signal was missing or contradicted; [When a run stops](#when-a-run-stops) says which stops end
+  the run at once and which leave the remaining tables to be attacked first. Why: guessing "protected" breaks the one promise the tool makes, guessing
   "exposed" teaches the user to ignore it, and carrying on would produce a report that looks
   complete when it is not.
 - Every verdict rests on the attempts rlsentry actually sent, never on reading the policies' SQL.
@@ -84,6 +152,9 @@ neither of them.
   table's rows the visitor got and, when its read grant covers only some columns, which ones. Why:
   rows the table really holds are the leak itself; a row the table does not hold could only come from
   code that shaped the answer, so it is no evidence, and the run stops instead.
+- From `anon-read-protected`, a read is protected on the two rules below. Until then a read that
+  neither request shows exposed gets no verdict, and the run's message says that protected verdicts
+  come with `anon-read-protected` (`anon-read-copy`).
 - **Protected by a missing grant** when the log shows the attempt refused with `42501` by
   PostgreSQL's privilege check on this table, and the catalog shows `anon` holds the read privilege
   on neither the table nor any of its columns. The basis names the missing grant.
@@ -114,7 +185,7 @@ neither of them.
   decides it, against running code, under [the bound](#the-bound-of-a-protected-verdict) below, and
   must include the cases listed under
   [Not yet built](#write-cases-anon-write-must-include-anon-write). Until then rlsentry attacks no
-  write (`anon-read` builds reads only), so no write is ever reported protected. Why: four reviews of this area found, on a real
+  write (`anon-read-copy` and `anon-read-protected` build reads only), so no write is ever reported protected. Why: four reviews of this area found, on a real
   PostgreSQL, a way past each write rule written ahead of code; the owner moved those rules to the
   task that can test them (`v3-spec`, issue #8).
 
@@ -145,7 +216,8 @@ this meaning (`v3-spec`, decision D-1).
 | all | anything else: request headers (`Prefer` included), cookies, method, path, the time it is sent | Not varied. The check below finds whether what decides access reads any of it; when it does, there is no verdict. |
 | all | requests to other tables first, then this one | Not in the bound: each operation is judged alone, against the rows the copy held. |
 
-- **Before attacking an operation on a table, rlsentry reads what decides access for it**, through
+- From `anon-read-protected`: **before attacking an operation on a table, rlsentry reads what
+  decides access for it**, through
   the direct view, and follows every function, view and table that reaches, to the end:
   - for every operation, the policies that apply to `anon` on that table for that operation and for
     read (a write reaches only rows the read policies admit);
@@ -195,6 +267,28 @@ this meaning (`v3-spec`, decision D-1).
   operation at a time, against the rows the copy held. Why: the reader must see where the promise
   ends, in the report itself, not only here.
 
+### When a run stops
+
+Decided by `anon-read-copy`. A stop ends the run with exit `2`, after the report of what it found.
+
+- These end the run at once, attacking no further table, because they mean the copy itself cannot be
+  trusted: an answer holding a row the table does not hold; a redirect; a migration that fails; a
+  PostgreSQL or PostgREST outside the accepted series
+  ([the throwaway copy](throwaway-copy.md#what-the-copy-is-made-of)); a setting a migration puts on
+  the REST layer or the roles it passes through
+  ([the throwaway copy](throwaway-copy.md#the-rest-layers-settings-come-from-rlsentry-alone)).
+- These leave that one table without a verdict while the remaining tables are still attacked, and
+  the run ends with exit `2` once every table is tried: a read neither request shows exposed (an
+  empty `200`, a `401` or `403`, a permission error, any other answer); a request that gets no answer
+  within 30 seconds; a table in a schema whose use is not granted to `anon`; a table on which `anon`
+  may read no column, for which no request is sent; a table with no columns.
+- For each table without a verdict, every form of report gives, per request, the HTTP status, the
+  PostgreSQL error code when there is one, and the reason ([reports](reports.md)).
+
+Why: a stop of the first kind would make any later verdict rest on a copy that is not the project's;
+one of the second kind says nothing about the next table, so the user still learns every exposed
+read in one run.
+
 ### Exit codes
 
 | Code | Means |
@@ -209,38 +303,11 @@ this meaning (`v3-spec`, decision D-1).
 
 ## Not yet built
 
-Each scenario below is built by the task it is marked with: the read scenarios by `anon-read`, in
-full; the write cases by `anon-write`, whose brief writes them in full. "Shown by" says how a person
-or a test sees a scenario hold.
+Each scenario below is built by the task it is marked with: the read scenarios by
+`anon-read-protected`, in full; the write cases by `anon-write`, whose brief writes them in full.
+"Shown by" says how a person or a test sees a scenario hold.
 
-### Read a table that has row-level security off (`anon-read`)
-
-Given a project with a table that has row-level security off,
-when the user runs rlsentry on its migrations,
-then the table's read is exposed, the basis says the visitor read every one of its rows, one fake
-row is shown as evidence, and the command exits `1`.
-Shown by: a test runs rlsentry on a lab schema with such a table and checks the verdict, that the
-evidence row is one of the rows the copy was seeded with, and the exit code.
-
-### Read a table whose policy lets everyone read (`anon-read`)
-
-Given a table with row-level security on and a read policy for `anon` that admits every row,
-when the user runs rlsentry,
-then its read is exposed, with a fake row as evidence, and the command exits `1`.
-Shown by: a test on a lab schema with such a policy checks the verdict, the evidence and the exit
-code.
-
-### Read a table whose policy lets some rows through (`anon-read`)
-
-Given a table whose read policy admits only rows with a certain value, and seeded rows both with and
-without it,
-when the user runs rlsentry,
-then its read is exposed, the basis says how many of the table's rows the visitor got, and the
-evidence is one of the admitted rows.
-Shown by: a test checks the verdict, the count against the rows seeded, and that the evidence row
-holds the admitted value.
-
-### Read a table whose policies admit no anonymous visitor (`anon-read`)
+### Read a table whose policies admit no anonymous visitor (`anon-read-protected`)
 
 Given a table with row-level security on and no read policy that admits `anon`,
 when the user runs rlsentry,
@@ -250,24 +317,14 @@ Shown by: a test checks the verdict, the basis and the exit code; and a person r
 log that the attempt's statement ran and that PostgreSQL refused the same statement with row-level
 security switched off.
 
-### Read a table the anonymous visitor holds no grant on (`anon-read`)
+### Read a table the anonymous visitor holds no grant on (`anon-read-protected`)
 
 Given a table on which `anon` holds the read privilege on neither the table nor any of its columns,
 when the user runs rlsentry,
 then its read is protected, and the basis names the missing grant.
 Shown by: a test checks the verdict and that the basis names the grant.
 
-### Read a table whose read grant covers only some columns (`anon-read`)
-
-Given a table with row-level security off on which `anon` holds no table read grant but holds the
-read privilege on some of its columns,
-when the user runs rlsentry,
-then its read is exposed, the basis names the columns the visitor read, the evidence holds only
-those columns, and the command exits `1`.
-Shown by: a test on a lab schema with such column grants checks the verdict, the columns named in
-the basis and the evidence, and the exit code.
-
-### An empty answer the database does not explain stops the run (`anon-read`)
+### An empty answer the database does not explain stops the run (`anon-read-protected`)
 
 Given a table the anonymous visitor gets no rows from while something other than a policy is the
 reason (for example, the table holds no rows when it is read),
@@ -277,7 +334,7 @@ was missing, and the command exits `2`.
 Shown by: a test on a schema built so that the table is empty when read checks that no verdict is
 reported, the message, and the exit code.
 
-### A refusal that only imitates the database stops the run (`anon-read`)
+### A refusal that only imitates the database stops the run (`anon-read-protected`)
 
 Given a table whose read policy calls a function that raises a permission error with the same code
 and message the database itself would use,
@@ -287,25 +344,7 @@ not come from the database's own checks, and the command exits `2`.
 Shown by: a test on a lab schema with such a function checks that no protected verdict appears, the
 message, and the exit code.
 
-### An answer holding rows the table does not hold stops the run (`anon-read`)
-
-Given a table whose read answer is shaped by code in the migrations to hold rows the table does not
-hold,
-when the user runs rlsentry,
-then the read is neither exposed nor protected; the run stops, naming the table, and the command
-exits `2`.
-Shown by: a test on a schema built to do this checks that no verdict is reported and the exit code.
-
-### A redirect is never followed (`anon-read`)
-
-Given a table whose read policy makes the REST layer answer with a redirect to another address,
-when the user runs rlsentry,
-then no request goes to that address, the run stops, its message says the read was answered with a
-redirect, and the command exits `2`.
-Shown by: a test that points the redirect at an address it watches, and checks that nothing arrives
-there, the message, and the exit code.
-
-### A read policy that depends on a request header stops the run (`anon-read`)
+### A read policy that depends on a request header stops the run (`anon-read-protected`)
 
 Given a table whose read policy admits a row only when the request carries a certain header value,
 when the user runs rlsentry,
@@ -315,7 +354,7 @@ Shown by: a test on a lab schema with such a policy checks that no verdict is re
 and the exit code; and a person sends the same read with that header to the copy and sees a row come
 back, which is why protected would have been wrong.
 
-### A column filled with the time does not stop the run (`anon-read`)
+### A column filled with the time does not stop the run (`anon-read-protected`)
 
 Given a table with a column filled by default with the current time, and a read policy that reads
 only the row's other columns,
@@ -323,15 +362,6 @@ when the user runs rlsentry,
 then the read gets a verdict like any other table's, and the run does not stop on that default.
 Shown by: a test on a lab schema with such a table (the shape Supabase's dashboard gives a new
 table) checks that a read verdict is reported and the exit code is `0` or `1`, not `2`.
-
-### A run that finds something and then stops exits 2 (`anon-read`)
-
-Given a project with one table whose read is exposed and, attacked after it, another whose read
-cannot be shown either way,
-when the user runs rlsentry,
-then the message names the exposed table and the table that stopped the run, and the command exits
-`2`, not `1`.
-Shown by: a test on such a schema checks the message and the exit code.
 
 ### Write cases `anon-write` must include (`anon-write`)
 
@@ -350,3 +380,5 @@ while a rule written ahead of code said protected; `anon-write`'s brief writes e
 ## Changed by
 
 - `v3-spec`: the first version of this area.
+- `anon-read-copy`: the exposed read and the stops of a read; the scenarios it built moved up to
+  Scenarios; the rest of the read scenarios marked `anon-read-protected`.

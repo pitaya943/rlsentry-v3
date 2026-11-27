@@ -1,0 +1,10 @@
+{
+  "flaw": "a policy that shuts out the anon key but not a request sent with no key",
+  "explanation": "The policy refuses requests whose token names an issuer, as the anon key does, so a request with no key at all, which carries no token, reads every invite.",
+  "reads": [
+    {"table": "public.invites", "verdict": "exposed", "because": "a request without a key",
+     "requests": ["no key"], "rows": "all", "columns": null}
+  ],
+  "exit_code": 1,
+  "stop": null
+}

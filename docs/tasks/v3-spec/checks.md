@@ -9,9 +9,11 @@ it, steps 4 and 5).
 
 It applies `state.py`'s rules (every task has `slug`, `goal`, `depends_on`, `pr`, `done`; no slug
 twice; no unknown dependency; no loop; a done task has a `pr`) and the brief's one more (no done
-task depends on one not done). On a problem it prints each and exits 1; otherwise it prints the
-first open task and what `anon-read` depends on and exits 0. On the task branch it prints
-`first open task: v3-spec` and `anon-read depends on: v3-spec`.
+task depends on one not done). On a problem it prints each, prefixed with the roadmap's path, and
+exits 1. Otherwise it exits 0 after three lines: `<path>: no problems`, `first open task: <slug>`
+with the first task not done whose dependencies are done, and `anon-read depends on: <slugs>` with
+that task's `depends_on`, or `(no anon-read task)` when the roadmap has no task of that slug. Both
+slugs are read from the roadmap at the time it runs, so they change as the roadmap does.
 
 ## Overlap with v2 (S-6)
 

@@ -1,0 +1,7 @@
+{
+  "flaw": "a migration that secures a table a later migration creates, so the migrations do not build",
+  "explanation": "Migrations run in the order of their names; the first one names public.orders before the second creates it, so the copy cannot be built and nothing is attacked.",
+  "reads": [],
+  "exit_code": 2,
+  "stop": "migration 20240101000000_policies.sql failed at line 2: relation \"public.orders\" does not exist"
+}

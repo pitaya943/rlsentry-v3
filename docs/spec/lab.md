@@ -5,12 +5,36 @@ that a user can see every kind of answer rlsentry gives without a project of the
 
 ## Scenarios
 
-None hold yet: nothing is built. The scenarios `anon-read` builds are under
-[Not yet built](#not-yet-built).
+"Shown by" names the test that shows a scenario hold; every test builds a real copy and sends real
+requests.
+
+### List the lab
+
+Given rlsentry installed,
+when the user lists the lab with `rlsentry lab`,
+then each schema is shown with its name and its flaw in one line, and nothing is built.
+Shown by: `tests/test_lab.py::test_the_list_names_each_schema_with_its_flaw_and_builds_nothing`.
+
+### Run a lab schema
+
+Given a lab schema rlsentry ships,
+when the user runs it by name with `rlsentry lab <name>`,
+then its verdicts, exit code and any stop are exactly those its statement gives.
+Shown by: `tests/test_lab.py::test_each_lab_schema_gives_what_its_statement_says`, which runs every
+lab schema by name and compares each result with its statement.
+
+### The lab shows a read exposed for every reason
+
+Given the lab as rlsentry ships it,
+when the user runs each schema in it,
+then between them they show a read exposed for each reason the verdicts area gives: row-level
+security off, a policy admitting everyone, a policy admitting some rows, a grant on some columns,
+and a request without a key.
+Shown by: `tests/test_lab.py::test_between_them_the_schemas_show_a_read_exposed_for_each_reason`.
 
 ## Rules
 
-Every rule here was decided by `v3-spec`.
+Every rule here was decided by `v3-spec`, except where a rule names `anon-read-copy`.
 
 - Each lab schema is a folder of migrations written as a Supabase project would write them, and runs
   exactly as a user's folder does. Why: a lab that took another path through rlsentry would teach
@@ -22,35 +46,23 @@ Every rule here was decided by `v3-spec`.
   Why: a learner can check the run against what they were told to expect, and the statement is what
   rlsentry's own tests check every lab schema against, so the lab cannot drift from the tool.
 - The lab holds, between its schemas, at least one table for every kind of answer the tasks built so
-  far give. `anon-read` brings the part of the lab whose flaws show on a read, and at least one
-  schema that is protected and one that stops; `anon-write` completes it with every verdict kind
-  for writes. Why: demand 4 is to see every kind of answer, and an answer the lab never gives is one
+  far give. `anon-read-copy` brings the schemas whose flaw shows as an exposed read, and one that
+  stops (a migration that fails); `anon-read-protected` adds schemas whose statement expects a
+  protected read; `anon-write` completes it with every verdict kind for writes. Why: demand 4 is to see every kind of answer, and an answer the lab never gives is one
   a learner first meets on a real project.
 - Lab schemas hold no real data and no real project's schema. Why: they are published with the tool.
+- `rlsentry lab` lists the lab; `rlsentry lab <name> [--json FILE]` runs one schema
+  (`anon-read-copy`). A user's own folder named `lab` is run as `rlsentry ./lab`. Why: a lab name
+  and a folder path would otherwise share the one argument.
 
 ## Not yet built
 
 Each scenario below is built by the task it is marked with. "Shown by" says how a person or a test
 sees it hold.
 
-### List the lab (`anon-read`)
+### The lab shows every answer a read can get (`anon-read-protected`)
 
-Given rlsentry installed,
-when the user asks for the list of lab schemas,
-then each is shown with its name and its flaw in one line, and nothing is built.
-Shown by: a test checks the list names every bundled schema with its flaw; a person reads it and
-picks one.
-
-### Run a lab schema (`anon-read`)
-
-Given a lab schema whose flaw shows on a read,
-when the user runs rlsentry on it by name,
-then the verdicts, the exit code and any stop are exactly those its statement gives.
-Shown by: a test runs every lab schema and compares each result with its statement.
-
-### The lab shows every answer a read can get (`anon-read`)
-
-Given the lab as `anon-read` ships it,
+Given the lab as `anon-read-protected` ships it,
 when the user runs each schema in it,
 then between them they show a read exposed for each reason the verdicts area gives (row-level
 security off, a policy admitting everyone, a policy admitting some rows, a grant on some columns, a
@@ -61,3 +73,5 @@ Shown by: a test collects the answers of every lab schema and checks each listed
 ## Changed by
 
 - `v3-spec`: the first version of this area.
+- `anon-read-copy`: the first lab schemas, `rlsentry lab`, and the scenarios it built moved up to
+  Scenarios.
