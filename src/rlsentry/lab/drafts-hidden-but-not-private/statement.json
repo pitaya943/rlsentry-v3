@@ -1,0 +1,10 @@
+{
+  "flaw": "a policy that hides only drafts, so private posts are public too",
+  "explanation": "The policy names the rows to hide instead of the rows to show: every status but draft, private included, is read by an anonymous visitor.",
+  "reads": [
+    {"table": "public.posts", "verdict": "exposed", "because": "a policy admitting some rows",
+     "requests": ["anon key", "no key"], "rows": "some", "columns": null}
+  ],
+  "exit_code": 1,
+  "stop": null
+}

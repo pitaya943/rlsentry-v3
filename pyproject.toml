@@ -20,7 +20,7 @@ rlsentry = "rlsentry.cli:main_exit"
 where = ["src"]
 
 [tool.setuptools.package-data]
-rlsentry = ["*.sql", "*.json"]
+rlsentry = ["*.sql", "*.json", "lab/*/statement.json", "lab/*/migrations/*.sql"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
