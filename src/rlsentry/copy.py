@@ -21,7 +21,7 @@ import time
 from importlib import resources
 from pathlib import Path
 
-from . import pg, statements
+from . import direct, pg, seed, statements
 from .inputs import Project
 from .stops import Stop, printable
 from .versions import POSTGRESQL, POSTGREST, Programs, Versions, accept, parse_postgrest
@@ -225,7 +225,10 @@ class Copy:
             for path in self.project.migrations:
                 self._apply(conn, path)
         self._check_settings()
-        self._start_rest()
+        with self.connect() as admin, self.connect(MIGRATIONS_ROLE) as migrations:
+            seed.fill(admin, migrations, direct.table_oids(admin, self.project.exposed_schemas),
+                      direct.users_oid(admin))
+        self._start_rest()  # after seeding: PostgREST reads the schema once, at start
 
     def _make_run_directory(self) -> None:
         root = runs_root()

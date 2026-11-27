@@ -13,6 +13,7 @@ part wrong changes it here with a trail row; the scenarios do not change.
 | `versions.py` | reading `--version` of `postgres` and `postgrest`, the accepted series, and the server's own version once running | S-7 |
 | `copy.py` (with `pg.py`, `statements.py`) | the throwaway copy: run directory, a free loopback port for PostgREST, `initdb`, the server, Supabase's setup, applying migrations, the settings check, starting PostgREST, destroying all of it however the run ends, and removing copies of dead runs | S-5, S-6 (setup), S-7 (server version) |
 | `supabase_setup.sql` (package data) | roles, schemas, `auth.users` and `auth.uid()/role()/jwt()`, default privileges, listed extensions, the extension guard | S-5 |
+| `direct.py` | the direct view: the exposed schemas' tables in order, the columns `anon` may read, schema usage, tables not reachable, and a table's rows rendered as PostgREST renders them, calling no code of the migrations' | S-1, S-4, S-5 |
 | `seed.py` | the fake rows: order by foreign keys, values the rules name, `auth.users` first | S-5, S-6 |
 | `attack.py` | the HTTP requests (anon key and no key, `Accept-Profile`, no redirect, 30 s timeout) and the JWT | S-1, S-4 |
 | `verdicts.py` | judging one read from its two answers and the direct view: exposed with basis and evidence, no verdict with status, error code and reason, or a stop at once | S-1, S-2 |

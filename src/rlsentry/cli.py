@@ -6,9 +6,9 @@ import argparse
 import signal
 import sys
 
-from . import inputs, versions
+from . import attack, direct, inputs, verdicts, versions
 from .copy import Copy
-from .pg import quote_literal
+from .report import Outcome, Result, Stopped, plain, stop_message
 from .stops import Stop, printable
 
 EXIT_STOPPED = 2
@@ -57,6 +57,9 @@ def main(argv: list[str] | None = None) -> int:
     except (KeyboardInterrupt, Terminated):
         say("interrupted: the copy was destroyed")
         return EXIT_INTERRUPTED
+    except Exception as e:  # never exit 1 (exposed) or 0 on a failure of rlsentry's own
+        say(f"failed: {type(e).__name__}: {e}; the copy was destroyed")
+        return EXIT_STOPPED
 
 
 def _run(arg: str) -> int:
@@ -65,25 +68,46 @@ def _run(arg: str) -> int:
         say(note)
     programs, found = versions.check()
     with Copy(project, programs, found, say=say) as copy:
-        with copy.connect() as admin:
-            tables = admin.rows(
-                "select n.nspname, c.relname, c.relrowsecurity "
-                "from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
-                "where c.relkind in ('r', 'p') and not c.relispartition "
-                "and n.nspname in (" + ", ".join(map(quote_literal, project.exposed_schemas)) + ") "
-                'order by n.nspname collate "C", c.relname collate "C"'
-            )
-        out = [
-            f"copy built from {len(project.migrations)} migration(s) on "
-            f"PostgreSQL {copy.versions.postgres} and PostgREST {copy.versions.postgrest}",
-            f"exposed schemas: {', '.join(project.exposed_schemas)}",
-            f"tables in them: {len(tables)}",
-        ]
-        for schema, table, rls in tables:
-            out.append(f"  {schema}.{table} (row-level security {'on' if rls == 't' else 'off'})")
-        out.append("nothing was attacked: reading the tables as the anonymous visitor is not built yet")
-        print(printable("\n".join(out)), flush=True)
-    return 0
+        result = Result(migrations=len(project.migrations), exposed_schemas=project.exposed_schemas,
+                        postgres=copy.versions.postgres, postgrest=copy.versions.postgrest)
+        try:
+            _attack(copy, project, result)
+            result.finished = True
+        except Stop as stop:
+            result.stop = Stopped(stop.reason, stop.table)
+        print(plain(result), flush=True)
+        message = stop_message(result)
+        if message:
+            say(message)
+    return result.exit_code
+
+
+def _attack(copy: Copy, project, result: Result) -> None:
+    """Every table of an exposed schema, in schema-qualified name order, read with the anon key and
+    with no key; a stop that means the copy cannot be trusted ends it at once."""
+    key = attack.anon_key(copy.jwt_secret)
+    with copy.connect() as admin:
+        result.not_reachable = direct.not_reachable(admin, project.exposed_schemas)
+        result.partitions = direct.partitions(admin, project.exposed_schemas)
+        for table in direct.tables(admin, project.exposed_schemas):
+            outcome = Outcome(table.schema, table.name)
+            if not table.columns:
+                outcome.reason = "the table has no columns; no request sent"
+            elif not table.schema_usage:
+                outcome.reason = (f"anon is not granted usage on schema {table.schema}, which Supabase "
+                                  "grants only on public; no request sent")
+            elif not table.readable:
+                outcome.reason = "no column it may read; no request sent"
+            else:
+                partial = None if table.readable == table.columns else table.readable
+                judged = []
+                for token in (key, None):
+                    rows = direct.rows(admin, table, table.readable)  # the table just before this request
+                    answer = attack.read(copy.rest_port, table.schema, table.name, table.readable, token)
+                    attempt, got = verdicts.judge_answer(f"{table.schema}.{table.name}", answer, rows)
+                    judged.append((attempt, got, rows))
+                outcome = verdicts.judge(table.schema, table.name, judged, partial)
+            result.outcomes.append(outcome)
 
 
 def main_exit() -> None:

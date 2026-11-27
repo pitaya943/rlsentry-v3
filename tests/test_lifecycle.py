@@ -73,7 +73,7 @@ class _nothing:
 
 def test_a_finished_run_and_a_stopped_run_leave_nothing(tmp_path):
     done = rlsentry(write(tmp_path / "ok", {"001.sql": "create table t (id int);"}))
-    assert done.returncode == 0
+    assert done.returncode == 1
     assert_no_copy_left()
     done = rlsentry(write(tmp_path / "bad", {"001.sql": "create table t (id int);", "002.sql": "nonsense;"}))
     assert done.returncode == 2
@@ -119,7 +119,7 @@ def test_a_copy_left_by_a_killed_run_is_removed_by_the_next(tmp_path):
     assert pid_alive(server) and left.is_dir(), "a kill cannot be caught: the copy is still there"
 
     done = rlsentry(write(tmp_path / "next", {"001.sql": "create table t (id int);"}))
-    assert done.returncode == 0, done.stderr
+    assert done.returncode == 1, done.stderr
     assert "removed the copy left by an earlier run that is no longer alive" in done.stderr
     assert f"database server (pid {server}) stopped" in done.stderr
     assert f"{left} deleted" in done.stderr

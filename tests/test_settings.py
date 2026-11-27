@@ -64,8 +64,11 @@ def test_other_settings_on_postgres_and_on_the_database_do_not_stop(tmp_path):
                    "alter database postgres set work_mem = '8MB';\n"
                    "alter role service_role set statement_timeout = '30s';",
     }))
-    assert done.returncode == 0, done.stderr
-    assert "public.notes" in done.stdout
+    # Not stopped by the settings: the table is read (and, its policy admitting no visitor, gets no verdict).
+    assert "the migrations make settings" not in done.stderr
+    assert done.returncode == 2, done.stderr
+    assert "read public.notes: no verdict" in done.stdout
+    assert "protected verdicts come with anon-read-protected" in done.stderr
     assert_no_copy_left()
 
 

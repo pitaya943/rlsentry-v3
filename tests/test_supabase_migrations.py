@@ -1,7 +1,7 @@
 """S-5: migrations written for Supabase build: they name its users table, its request functions,
 and a listed extension created with `if not exists`."""
 
-from conftest import assert_no_copy_left, rlsentry, write
+from conftest import assert_no_copy_left, outcomes, rlsentry, write
 
 PROFILES = """
 create extension if not exists "uuid-ossp" with schema extensions;
@@ -48,7 +48,10 @@ def test_migrations_written_for_supabase_build(tmp_path):
         "supabase/migrations/20240102000000_todos.sql": TODOS,
     })
     done = rlsentry(folder)
-    assert done.returncode == 0, done.stderr
-    assert "public.profiles (row-level security on)" in done.stdout
-    assert "public.todos (row-level security on)" in done.stdout
+    # The run reaches the attack: every table gets a verdict or no verdict, never a stop for setup.
+    found = outcomes(done.stdout)
+    assert found["public.profiles"]["verdict"] == "exposed"
+    assert found["public.todos"]["verdict"] is None  # only a user's own todos: nothing for anon
+    assert done.returncode == 2, done.stderr
+    assert "protected verdicts come with anon-read-protected" in done.stderr
     assert_no_copy_left()
