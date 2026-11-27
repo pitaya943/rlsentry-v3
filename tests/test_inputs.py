@@ -3,6 +3,8 @@
 import os
 import time
 
+import pytest
+
 from conftest import assert_no_copy_left, records, rlsentry, write
 
 
@@ -85,4 +87,20 @@ def test_a_migration_that_fails_stops_the_run_naming_the_file_and_the_statement(
     assert "relation \"missing_table\" does not exist" in done.stderr
     assert "alter table b add column owner uuid references missing_table(id)" in done.stderr
     assert "copy built" not in done.stdout and "public.a" not in done.stdout
+    assert_no_copy_left()
+
+
+@pytest.mark.parametrize("shadow", [
+    "alter database postgres set search_path = public, pg_catalog;\n"
+    "create view public.pg_class as select * from pg_catalog.pg_class where relname <> 'secrets';",
+    "alter database postgres set search_path = public, pg_catalog;\n"
+    "create view public.pg_namespace as select * from pg_catalog.pg_namespace where false;",
+])
+def test_the_direct_view_shows_what_the_copy_holds_whatever_the_database_settings(tmp_path, shadow):
+    done = rlsentry(write(tmp_path / "p", {
+        "001.sql": "create table secrets (id int primary key);\nalter table secrets enable row level security;",
+        "002.sql": shadow,
+    }))
+    assert done.returncode == 0, done.stderr
+    assert "public.secrets (row-level security on)" in done.stdout
     assert_no_copy_left()

@@ -128,19 +128,21 @@ create extension tablefunc with schema extensions;
 create extension isn with schema extensions;
 
 -- The guard: any other extension is refused. Owned by the superuser in a schema nobody else may
--- use, so the migrations' role can neither drop nor disable it.
+-- use, so the migrations' role can neither drop nor disable it. It runs inside the migrations' own
+-- session, so it names the catalog in full and pins its search_path (pg_temp last, so no temporary
+-- object or operator of theirs is found first), and a name it cannot find is refused, not let through.
 create schema rlsentry;
 revoke all on schema rlsentry from public;
 
 create function rlsentry.only_listed_extensions() returns event_trigger
-language plpgsql as $$
+language plpgsql set search_path = pg_catalog, pg_temp as $$
 declare
   r record;
   name text;
 begin
-  for r in select * from pg_event_trigger_ddl_commands() where command_tag = 'CREATE EXTENSION' loop
-    select extname into name from pg_extension where oid = r.objid;
-    if name not in ('pgcrypto', 'uuid-ossp', 'citext', 'pg_trgm', 'btree_gin', 'btree_gist',
+  for r in select * from pg_catalog.pg_event_trigger_ddl_commands() where command_tag = 'CREATE EXTENSION' loop
+    select e.extname into name from pg_catalog.pg_extension e where e.oid = r.objid;
+    if name is null or name not in ('pgcrypto', 'uuid-ossp', 'citext', 'pg_trgm', 'btree_gin', 'btree_gist',
                     'hstore', 'ltree', 'intarray', 'fuzzystrmatch', 'tablefunc', 'isn') then
       raise exception 'extension "%" is not on the list the copy allows', name
         using errcode = 'insufficient_privilege',

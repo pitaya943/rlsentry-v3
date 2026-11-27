@@ -132,3 +132,34 @@ def test_listed_extensions_are_there_for_migrations_written_for_supabase(tmp_pat
     done = rlsentry(folder)
     assert done.returncode == 0, done.stderr
     assert "public.t" in done.stdout
+
+
+# The guard runs inside the migrations' own session, so it must not resolve a name, a function or
+# an operator under their search_path or their temporary objects (verdict D-1 on #25).
+SHADOW_EXTENSION = [
+    # a view in public, put before pg_catalog, naming every new extension as a listed one
+    "set search_path = public, pg_catalog;\n"
+    "create view public.pg_extension as select oid, 'pgcrypto'::name as extname from pg_catalog.pg_extension;",
+    # a view that finds no row, so the extension's name is null
+    "set search_path = public, pg_catalog;\n"
+    "create view public.pg_extension as select oid, extname from pg_catalog.pg_extension where false;",
+    # a temporary view: pg_temp is searched before pg_catalog, with no search_path change at all
+    "create temporary view pg_extension as select oid, 'pgcrypto'::name as extname from pg_catalog.pg_extension;",
+    # a function standing in for the event trigger's own
+    "set search_path = public, pg_catalog;\n"
+    "create function public.pg_event_trigger_ddl_commands() returns table "
+    "(classid oid, objid oid, objsubid int, command_tag text, object_type text, schema_name text, "
+    "object_identity text, in_extension bool, command pg_ddl_command) "
+    "language sql as $$ select null::oid, null::oid, null::int, null::text, null::text, null::text, "
+    "null::text, null::bool, null::pg_ddl_command where false $$;",
+    # an operator that says every name is unequal to nothing
+    "set search_path = public, pg_catalog;\n"
+    "create function public.never_ne(text, text) returns bool language sql as 'select false';\n"
+    "create operator public.<> (leftarg = text, rightarg = text, function = public.never_ne);",
+]
+
+
+@pytest.mark.parametrize("shadow", SHADOW_EXTENSION)
+def test_a_shadowed_catalog_does_not_let_an_extension_through(tmp_path, shadow):
+    done = refused(tmp_path, shadow + "\ncreate extension lo;", statement="create extension lo")
+    assert 'extension "lo" is not on the list the copy allows' in done.stderr

@@ -67,3 +67,22 @@ def test_other_settings_on_postgres_and_on_the_database_do_not_stop(tmp_path):
     assert done.returncode == 0, done.stderr
     assert "public.notes" in done.stdout
     assert_no_copy_left()
+
+
+# The settings check runs on its own connection, but a migration owns the database, so the
+# database's own settings would reach that connection (verdict D-2 on #25).
+@pytest.mark.parametrize("shadow", [
+    "alter database postgres set search_path = public, pg_catalog;\n"
+    "create view public.pg_db_role_setting as select setdatabase, setrole, setconfig "
+    "from pg_catalog.pg_db_role_setting where false;",
+    "alter database postgres set search_path = public, pg_catalog;\n"
+    "create view public.pg_roles as select rolname, oid from pg_catalog.pg_roles where rolname <> 'anon';",
+    # an operator in public, found before the catalog's, that no role's oid equals
+    "create function public.never_eq(oid, oid) returns bool language sql as 'select false';\n"
+    "create operator public.= (leftarg = oid, rightarg = oid, function = public.never_eq);\n"
+    "alter database postgres set search_path = public, pg_catalog;",
+])
+def test_the_database_settings_a_migration_makes_do_not_blind_the_settings_check(tmp_path, shadow):
+    err = stopped(tmp_path, {"001_notes.sql": OWNER_TABLE, "002.sql": "alter role anon set statement_timeout = '1s';",
+                             "003.sql": shadow})
+    assert "statement_timeout = '1s' on role anon" in err

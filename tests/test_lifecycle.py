@@ -125,3 +125,25 @@ def test_a_copy_left_by_a_killed_run_is_removed_by_the_next(tmp_path):
     assert f"{left} deleted" in done.stderr
     assert not pid_alive(server)
     assert_no_copy_left()
+
+
+@pytest.mark.parametrize("setting", [
+    "alter database postgres set role = anon",
+    "alter database postgres set default_transaction_read_only = on",
+])
+def test_the_copys_own_connection_reads_as_its_superuser_whatever_the_database_settings(tmp_path, setting):
+    # The direct view (and T-02's reads of the rows the copy really holds) go through this
+    # connection; a migration owns the database, so its settings must not reach it (verdict D-2, #25).
+    project = inputs.resolve(str(write(tmp_path / "p", {"001.sql": (
+        "create table secrets (id int primary key);\n"
+        "insert into secrets values (1), (2);\n"
+        "alter table secrets enable row level security;\n"
+        "revoke all on secrets from anon;\n"
+        + setting + ";"
+    )})))
+    programs, found = versions.check()
+    with Copy(project, programs, found) as copy:
+        with copy.connect() as admin:
+            assert admin.rows("select current_user, pg_catalog.current_setting('transaction_read_only')") == [("rlsentry", "off")]
+            assert admin.rows("select count(*) from public.secrets") == [("2",)]
+    assert_no_copy_left()

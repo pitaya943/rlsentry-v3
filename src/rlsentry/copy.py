@@ -31,6 +31,7 @@ MIGRATIONS_ROLE = "postgres"
 DB_PORT = 5432  # names the socket file only: the server listens on no TCP port
 WATCHED_ROLES = ("anon", "authenticated", "authenticator")
 START_TIMEOUT = 30.0
+SAFE_SEARCH_PATH = "pg_catalog, pg_temp"  # pg_temp named last, or it is searched before the catalog
 
 
 def runs_root() -> Path:
@@ -181,7 +182,32 @@ class Copy:
         return f"http://127.0.0.1:{self.rest_port}"
 
     def connect(self, user: str = SUPERUSER) -> pg.Connection:
-        return pg.Connection(self.socket_dir, DB_PORT, user)
+        """A connection to the copy's database. The superuser's is shielded from the settings the
+        migrations put on the database they own (a role to switch to, a search_path that puts their
+        own objects before the catalog, read-only transactions, ...): each one is sent back at startup
+        with the server's own value, and the search_path is the catalog's alone."""
+        if user != SUPERUSER:
+            return pg.Connection(self.socket_dir, DB_PORT, user)
+        return pg.Connection(self.socket_dir, DB_PORT, user, settings={
+            **self._server_values_of_database_settings(), "search_path": SAFE_SEARCH_PATH,
+        })
+
+    def _server_values_of_database_settings(self) -> dict[str, str]:
+        """For each setting made on database postgres (for every role, or for the superuser), the
+        value the server gives it elsewhere, read through database template1, which no migration owns.
+        Names the server does not know (placeholders such as pgrst.*) are left out: no rlsentry query
+        reads them, and the settings check names those it must."""
+        with pg.Connection(self.socket_dir, DB_PORT, SUPERUSER, "template1",
+                           settings={"search_path": SAFE_SEARCH_PATH}) as admin:
+            rows = admin.rows(
+                "select n.name, pg_catalog.current_setting(n.name, true) "
+                "from (select pg_catalog.split_part(pg_catalog.unnest(s.setconfig), '=', 1) as name "
+                "      from pg_catalog.pg_db_role_setting s "
+                "      where s.setdatabase in (0, (select d.oid from pg_catalog.pg_database d where d.datname = 'postgres')) "
+                "      and s.setrole in (0, (select r.oid from pg_catalog.pg_roles r where r.rolname = current_user))) n "
+                "where pg_catalog.current_setting(n.name, true) is not null"
+            )
+        return dict(rows)
 
     # -- building --------------------------------------------------------------------------------
 
@@ -299,10 +325,10 @@ class Copy:
         """Every setting the migrations put on PostgREST's or the visitor's roles, or any pgrst.* one."""
         with self.connect() as admin:
             rows = admin.rows(
-                "select coalesce(d.datname, ''), coalesce(r.rolname, ''), unnest(s.setconfig) "
-                "from pg_db_role_setting s "
-                "left join pg_database d on d.oid = s.setdatabase "
-                "left join pg_roles r on r.oid = s.setrole order by 1, 2, 3"
+                "select coalesce(d.datname, ''), coalesce(r.rolname, ''), pg_catalog.unnest(s.setconfig) "
+                "from pg_catalog.pg_db_role_setting s "
+                "left join pg_catalog.pg_database d on d.oid = s.setdatabase "
+                "left join pg_catalog.pg_roles r on r.oid = s.setrole order by 1, 2, 3"
             )
         found = []
         for database, role, setting in rows:

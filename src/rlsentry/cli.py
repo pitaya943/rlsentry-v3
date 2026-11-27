@@ -68,7 +68,7 @@ def _run(arg: str) -> int:
         with copy.connect() as admin:
             tables = admin.rows(
                 "select n.nspname, c.relname, c.relrowsecurity "
-                "from pg_class c join pg_namespace n on n.oid = c.relnamespace "
+                "from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
                 "where c.relkind in ('r', 'p') and not c.relispartition "
                 "and n.nspname in (" + ", ".join(map(quote_literal, project.exposed_schemas)) + ") "
                 'order by n.nspname collate "C", c.relname collate "C"'

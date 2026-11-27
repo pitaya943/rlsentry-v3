@@ -40,7 +40,9 @@ class Result:
 
 
 class Connection:
-    def __init__(self, socket_dir: str, port: int, user: str, database: str = "postgres"):
+    def __init__(self, socket_dir: str, port: int, user: str, database: str = "postgres",
+                 settings: dict[str, str] | None = None):
+        """`settings` are sent at startup: they take precedence over the database's and the role's own."""
         self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._sock.connect(f"{socket_dir}/.s.PGSQL.{port}")
         params = b"".join(
@@ -50,6 +52,7 @@ class Connection:
                 ("database", database),
                 ("client_encoding", "UTF8"),
                 ("application_name", "rlsentry"),
+                *(settings or {}).items(),
             )
         )
         body = struct.pack("!i", 196608) + params + b"\0"
