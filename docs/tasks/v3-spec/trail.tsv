@@ -10,3 +10,4 @@ time	who	decision	why	evidence
 2026-11-27T05:57Z	orchestrator	second reader read brief at 118dcbe; owner accepted four small fixes without a third read	after a second read the rest is the owner's call	docs/tasks/v3-spec/brief.md
 2026-11-27T05:57Z	owner	brief-approved fcd38ee9cb2a4f149bc783685bab1aa2f768fb57	owner said the brief is right	conversation 2026-11-27
 2026-11-27T05:57Z	owner	roadmap-approved c2548274b3feac466963be3a4bfd0525de2ab0c2	owner approved the roadmap with the brief	docs/roadmap.json
+2026-11-27T06:09Z	orchestrator	fix-round T-01	verifier FAIL: column grants and update WITH CHECK give false protected	https://github.com/pitaya943/rlsentry-v3/pull/6#issuecomment-7211268769
