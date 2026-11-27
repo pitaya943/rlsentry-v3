@@ -19,3 +19,5 @@ time	who	decision	why	evidence
 2026-11-27T06:46Z	orchestrator	needs-owner #8	T-01 owner-granted round used; defects 6-7 remain	https://github.com/pitaya943/rlsentry-v3/pull/6#issuecomment-7211823557
 2026-11-27T06:52Z	owner	T-01 narrowed: write protected rules move to anon-write with defects 2, 3, 6 as its scenarios; one more fix round for T-01	option 1 of #8, decided in the conversation	https://github.com/pitaya943/rlsentry-v3/issues/8#issuecomment-7211920110
 2026-11-27T06:52Z	owner	close a needs-owner issue as soon as it is decided, so open ones are only those still waiting	owner asked in the conversation (issues cannot be deleted by the bot; closing is the nearest)	#7, #8 closed
+2026-11-27T06:53Z	orchestrator	reader read changed brief at 77ef2d9; owner accepted three small fixes without another read	S-3 marking, the list in S-4a, anon-write cases as one-liners	docs/tasks/v3-spec/brief.md
+2026-11-27T06:53Z	owner	brief-approved 398eaa5c6b653c886d17bb745dba9a28b50466ee	owner said yes approved	conversation 2026-11-27
